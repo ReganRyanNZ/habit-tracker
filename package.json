@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "predev": "rm -f public/sw.js public/workbox-*.js public/manifest.json 2>/dev/null || true",
+    "postinstall": "prisma generate",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
