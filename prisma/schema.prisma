@@ -1,0 +1,34 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model HabitSheet {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String   @default("My Habits")
+  habits    Habit[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Habit {
+  id          String   @id @default(cuid())
+  sheetId     String
+  sheet       HabitSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  name        String
+  group       String
+  completions String   @default("{}")
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([sheetId])
+}
