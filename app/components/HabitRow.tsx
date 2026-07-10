@@ -12,14 +12,16 @@ interface HabitRowProps {
   onDelete: (habitId: string) => void
   onRename: (habitId: string, newName: string) => void
   onReorder?: (habitId: string, direction: 'up' | 'down') => void
+  isOwner: boolean
 }
 
-export default function HabitRow({ habit, dates, onToggleCompletion, onDelete, onRename, onReorder }: HabitRowProps) {
+export default function HabitRow({ habit, dates, onToggleCompletion, onDelete, onRename, onReorder, isOwner }: HabitRowProps) {
   const [showMenu, setShowMenu] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editName, setEditName] = useState(habit.name)
 
   const handleCellClick = () => {
+    if (!isOwner) return
     if (isEditing) return
     setShowMenu(!showMenu)
   }
@@ -63,7 +65,7 @@ export default function HabitRow({ habit, dates, onToggleCompletion, onDelete, o
   return (
     <tr className="border-t hover:bg-gray-50">
       <td
-        className="p-1 sticky left-0 bg-white z-10 shadow-[1px_0_4px_rgba(0,0,0,0.1)] cursor-pointer"
+        className={`p-1 sticky left-0 bg-white z-10 shadow-[1px_0_4px_rgba(0,0,0,0.1)] ${isOwner ? 'cursor-pointer' : ''}`}
         onClick={handleCellClick}
       >
         <div className="flex items-center gap-1">
@@ -81,7 +83,7 @@ export default function HabitRow({ habit, dates, onToggleCompletion, onDelete, o
           ) : (
             <>
               <span className="text-sm flex-1 truncate">{habit.name}</span>
-              {showMenu && (
+              {isOwner && showMenu && (
                 <>
                   <button
                     onClick={(e) => handleMenuClick('edit', e)}
@@ -129,7 +131,10 @@ export default function HabitRow({ habit, dates, onToggleCompletion, onDelete, o
           <td key={date.toISOString()} className="text-center p-1">
             <button
               onClick={() => onToggleCompletion(habit.id, dateKey)}
+              disabled={!isOwner}
               className={`w-7 h-7 rounded-full mx-auto transition-all ${
+                !isOwner ? 'cursor-not-allowed opacity-70' : ''
+              } ${
                 isCompleted
                   ? 'bg-green-500 hover:bg-green-600'
                   : 'bg-gray-200 hover:bg-gray-300'

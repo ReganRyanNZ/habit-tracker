@@ -10,25 +10,52 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model HabitSheet {
-  id        String   @id @default(cuid())
-  slug      String   @unique
-  name      String   @default("My Habits")
-  habits    Habit[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+// User from Clerk
+model User {
+  id            String    @id // Clerk user ID
+  habitGroup    HabitGroup?
+  followedGroups Follow[] // Groups this user follows
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
+// Each user has ONE habit group
+model HabitGroup {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String   @default("My Habits")
+  habits      Habit[]
+  followers   Follow[]
+  shareToken   String   @unique @default(cuid()) // For sharing with others
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Habits belong to a group
 model Habit {
   id          String   @id @default(cuid())
-  sheetId     String
-  sheet       HabitSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  groupId     String
+  group       HabitGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
   name        String
-  group       String
-  completions String   @default("{}")
+  completions String   @default("{}") // JSON: dateKey -> boolean
   order       Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@index([sheetId])
+  @@index([groupId])
+}
+
+// Following relationships (view-only access)
+model Follow {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  groupId     String
+  group       HabitGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, groupId])
+  @@index([userId])
+  @@index([groupId])
 }

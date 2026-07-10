@@ -10,11 +10,11 @@ interface HabitGridProps {
   habits: Habit[]
   onHabitsChange: (habits: Habit[]) => void
   onAddHabit: (name: string, group: string) => void
-  sheetId: string
-  existingGroups: string[]
+  groupId: string
+  isOwner: boolean
 }
 
-export default function HabitGrid({ habits, onHabitsChange, onAddHabit, sheetId, existingGroups }: HabitGridProps) {
+export default function HabitGrid({ habits, onHabitsChange, onAddHabit, groupId, isOwner }: HabitGridProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   // Month selection state
@@ -28,25 +28,9 @@ export default function HabitGrid({ habits, onHabitsChange, onAddHabit, sheetId,
   // Get dates for the selected month
   const dates = useMemo(() => getMonthRange(selectedYear, selectedMonth), [selectedYear, selectedMonth])
 
-  // Memoize grouped habits to avoid re-computation on every render
-  const groupedHabits = useMemo(() => {
-    const grouped = habits.reduce<Record<string, Habit[]>>((acc, habit) => {
-      if (!acc[habit.group]) {
-        acc[habit.group] = []
-      }
-      acc[habit.group].push(habit)
-      return acc
-    }, {})
-
-    // Sort groups and habits within each group
-    const sorted: Record<string, Habit[]> = {}
-    Object.keys(grouped)
-      .sort()
-      .forEach(group => {
-        sorted[group] = grouped[group].sort((a, b) => a.order - b.order)
-      })
-
-    return sorted
+  // Sort habits by order
+  const sortedHabits = useMemo(() => {
+    return [...habits].sort((a, b) => a.order - b.order)
   }, [habits])
 
   // Find the index of today in the dates array for scrolling
@@ -58,13 +42,10 @@ export default function HabitGrid({ habits, onHabitsChange, onAddHabit, sheetId,
   useEffect(() => {
     if (scrollContainerRef.current && todayIndex >= 0) {
       const container = scrollContainerRef.current
-      // Calculate the position to put today on the right side
-      // Each day column is about 44px (min-w-[40px] + padding)
       const columnWidth = 44
       const containerWidth = container.clientWidth
       const targetPosition = (todayIndex * columnWidth) - containerWidth + columnWidth
 
-      // Smooth scroll to the calculated position
       container.scrollTo({
         left: Math.max(0, targetPosition),
         behavior: 'smooth'
@@ -72,12 +53,11 @@ export default function HabitGrid({ habits, onHabitsChange, onAddHabit, sheetId,
     }
   }, [todayIndex])
 
-  // Available months for the selector (last 12 months + next 6 months)
+  // Available months for the selector
   const availableMonths = useMemo(() => {
     const months: Array<{ year: number; month: number; label: string }> = []
     const current = new Date()
 
-    // Past 12 months
     for (let i = 12; i >= 0; i--) {
       const date = new Date(current.getFullYear(), current.getMonth() - i, 1)
       months.push({
@@ -87,13 +67,9 @@ export default function HabitGrid({ habits, onHabitsChange, onAddHabit, sheetId,
       })
     }
 
-    // Current and next 6 months
     for (let i = 0; i <= 6; i++) {
       const date = new Date(current.getFullYear(), current.getMonth() + i, 1)
-      if (i === 0) {
-        // Skip current month as it's already added
-        continue
-      }
+      if (i === 0) continue
       months.push({
         year: date.getFullYear(),
         month: date.getMonth(),
@@ -106,6 +82,8 @@ export default function HabitGrid({ habits, onHabitsChange, onAddHabit, sheetId,
 
   // Memoize callbacks to prevent unnecessary re-renders
   const handleToggleCompletion = useCallback((habitId: string, dateKey: string) => {
+    if (!isOwner) return
+
     const updatedHabits = habits.map(habit => {
       if (habit.id === habitId) {
         const completions = { ...habit.completions }
@@ -115,41 +93,40 @@ export default function HabitGrid({ habits, onHabitsChange, onAddHabit, sheetId,
       return habit
     })
     onHabitsChange(updatedHabits)
-  }, [habits, onHabitsChange])
+  }, [habits, onHabitsChange, isOwner])
 
   const handleDeleteHabit = useCallback((habitId: string) => {
+    if (!isOwner) return
+
     const habit = habits.find(h => h.id === habitId)
     if (habit) {
       setHabitToDelete(habit)
     }
-  }, [habits])
+  }, [habits, isOwner])
 
   const confirmDelete = useCallback(() => {
-    if (habitToDelete) {
+    if (habitToDelete && isOwner) {
       onHabitsChange(habits.filter(h => h.id !== habitToDelete.id))
       setHabitToDelete(null)
     }
-  }, [habitToDelete, habits, onHabitsChange])
+  }, [habitToDelete, habits, onHabitsChange, isOwner])
 
   const cancelDelete = useCallback(() => {
     setHabitToDelete(null)
   }, [])
 
-  const handleRenameGroup = useCallback((oldName: string, newName: string) => {
-    const updatedHabits = habits.map(habit =>
-      habit.group === oldName ? { ...habit, group: newName, updatedAt: new Date() } : habit
-    )
-    onHabitsChange(updatedHabits)
-  }, [habits, onHabitsChange])
-
   const handleRenameHabit = useCallback((habitId: string, newName: string) => {
+    if (!isOwner) return
+
     const updatedHabits = habits.map(habit =>
       habit.id === habitId ? { ...habit, name: newName, updatedAt: new Date() } : habit
     )
     onHabitsChange(updatedHabits)
-  }, [habits, onHabitsChange])
+  }, [habits, onHabitsChange, isOwner])
 
   const handleReorderHabit = useCallback((habitId: string, direction: 'up' | 'down') => {
+    if (!isOwner) return
+
     const habitIndex = habits.findIndex(h => h.id === habitId)
     if (habitIndex === -1) return
 
@@ -158,16 +135,14 @@ export default function HabitGrid({ habits, onHabitsChange, onAddHabit, sheetId,
 
     if (targetIndex < 0 || targetIndex >= habits.length) return
 
-    // Swap the habits
     [newHabits[habitIndex], newHabits[targetIndex]] = [newHabits[targetIndex], newHabits[habitIndex]]
 
-    // Update order values
     newHabits.forEach((habit, index) => {
       habit.order = index
     })
 
     onHabitsChange(newHabits)
-  }, [habits, onHabitsChange])
+  }, [habits, onHabitsChange, isOwner])
 
   return (
     <div className="w-full">
@@ -207,17 +182,16 @@ export default function HabitGrid({ habits, onHabitsChange, onAddHabit, sheetId,
             </tr>
           </thead>
           <tbody>
-            {Object.entries(groupedHabits).map(([group, groupHabits]) => (
-              <GroupSection
-                key={group}
-                group={group}
-                habits={groupHabits}
+            {sortedHabits.map(habit => (
+              <HabitRow
+                key={habit.id}
+                habit={habit}
                 dates={dates}
                 onToggleCompletion={handleToggleCompletion}
-                onDeleteHabit={handleDeleteHabit}
-                onRenameGroup={handleRenameGroup}
-                onRenameHabit={handleRenameHabit}
-                onReorderHabit={handleReorderHabit}
+                onDelete={handleDeleteHabit}
+                onRename={handleRenameHabit}
+                onReorder={handleReorderHabit}
+                isOwner={isOwner}
               />
             ))}
           </tbody>
@@ -244,60 +218,5 @@ export default function HabitGrid({ habits, onHabitsChange, onAddHabit, sheetId,
         </div>
       )}
     </div>
-  )
-}
-
-function GroupSection({
-  group,
-  habits,
-  dates,
-  onToggleCompletion,
-  onDeleteHabit,
-  onRenameGroup,
-  onRenameHabit,
-  onReorderHabit,
-}: {
-  group: string
-  habits: Habit[]
-  dates: Date[]
-  onToggleCompletion: (habitId: string, dateKey: string) => void
-  onDeleteHabit: (habitId: string) => void
-  onRenameGroup: (oldName: string, newName: string) => void
-  onRenameHabit: (habitId: string, newName: string) => void
-  onReorderHabit: (habitId: string, direction: 'up' | 'down') => void
-}) {
-  const [isExpanded, setIsExpanded] = useState(true)
-
-  return (
-    <>
-      <tr className="group/section">
-        <td className="p-0 sticky left-0 bg-gray-50 z-10 shadow-[1px_0_4px_rgba(0,0,0,0.1)]">
-          <div
-            className="flex items-center gap-1 px-2 py-1 hover:bg-gray-100 cursor-pointer"
-            onClick={() => setIsExpanded(!isExpanded)}
-          >
-            <span className="text-gray-400 text-xs">
-              {isExpanded ? '▼' : '▶'}
-            </span>
-            <span className="font-medium text-xs text-gray-700">{group}</span>
-          </div>
-        </td>
-        <td colSpan={dates.length} className="p-0">
-          <div className="h-full bg-gray-50"></div>
-        </td>
-      </tr>
-      {isExpanded &&
-        habits.map(habit => (
-          <HabitRow
-            key={habit.id}
-            habit={habit}
-            dates={dates}
-            onToggleCompletion={onToggleCompletion}
-            onDelete={onDeleteHabit}
-            onRename={onRenameHabit}
-            onReorder={onReorderHabit}
-          />
-        ))}
-    </>
   )
 }

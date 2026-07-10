@@ -1,9 +1,10 @@
+import { ClerkProvider } from '@clerk/nextjs'
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
   title: 'Habits',
-  description: 'Track daily habits with friends. No login required.',
+  description: 'Track daily habits with friends.',
   icons: {
     icon: '/favicon.svg',
     apple: '/favicon.svg',
@@ -28,12 +29,14 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <head>
-        <link rel="icon" href="/favicon.ico" />
-        <link rel="apple-touch-icon" href="/icon-192.png" />
-      </head>
-      <body className="antialiased">{children}</body>
-    </html>
+    <ClerkProvider>
+      <html lang="en">
+        <head>
+          <link rel="icon" href="/favicon.ico" />
+          <link rel="apple-touch-icon" href="/icon-192.png" />
+        </head>
+        <body className="antialiased">{children}</body>
+      </html>
+    </ClerkProvider>
   )
 }
