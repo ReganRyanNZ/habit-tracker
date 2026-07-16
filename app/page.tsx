@@ -1,10 +1,24 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useAuth, UserButton } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
-import { Plus, Share2, Loader2, UserMinus } from 'lucide-react'
-import { db, clearAllData, getUserHabitGroup, getFollowedGroups } from '@/lib/db-local'
+import { Plus, Share2, Loader2 } from 'lucide-react'
+import {
+  db,
+  clearAllData,
+  getUserHabitGroup,
+  getFollowedGroups,
+  addActionToQueue,
+  removeActionsFromQueue,
+  updateLastSyncAt,
+  getSyncQueue,
+  applyActionsToHabits,
+  saveHabits,
+  saveHabitGroup,
+  saveFollowedGroup,
+  type Action
+} from '@/lib/db-local'
 import type { Habit } from '@/lib/db-local'
 import HabitGrid from '@/app/components/HabitGrid'
 import AddHabitDialog from '@/app/components/AddHabitDialog'
@@ -14,6 +28,8 @@ interface HabitGroup {
   userId: string
   name: string
   shareToken: string
+  createdAt: Date
+  updatedAt: Date
 }
 
 interface FollowedGroup {
@@ -33,15 +49,21 @@ interface SectionedHabit extends Habit {
 export default function HomePage() {
   const { userId, isLoaded } = useAuth()
   const [loading, setLoading] = useState(true)
-  const [myHabits, setMyHabits] = useState<Habit[]>([])
+  const [baseHabits, setBaseHabits] = useState<Habit[]>([]) // Base state from server/cache
+  const [pendingActions, setPendingActions] = useState<Action[]>([]) // Local actions
   const [followedGroups, setFollowedGroups] = useState<FollowedGroup[]>([])
   const [myGroup, setMyGroup] = useState<HabitGroup | null>(null)
   const [isEditingName, setIsEditingName] = useState(false)
   const [showShareDialog, setShowShareDialog] = useState(false)
   const [syncing, setSyncing] = useState(false)
 
-  const habitsRef = useRef<Habit[]>([])
-  useEffect(() => { habitsRef.current = myHabits }, [myHabits])
+  // Track if we've loaded initial data
+  const initialLoadDone = useRef(false)
+
+  // Computed display state: base habits + pending actions
+  const displayHabits = useMemo(() => {
+    return applyActionsToHabits(baseHabits, pendingActions)
+  }, [baseHabits, pendingActions])
 
   // Combine all habits with section information
   const allHabits = useMemo(() => {
@@ -49,7 +71,7 @@ export default function HomePage() {
 
     // Add my habits
     if (myGroup) {
-      myHabits.forEach(habit => {
+      displayHabits.forEach(habit => {
         sections.push({
           ...habit,
           groupName: myGroup.name,
@@ -72,7 +94,7 @@ export default function HomePage() {
     })
 
     return sections
-  }, [myHabits, myGroup, followedGroups])
+  }, [displayHabits, myGroup, followedGroups])
 
   // Load data on mount
   useEffect(() => {
@@ -103,44 +125,77 @@ export default function HomePage() {
 
     try {
       setLoading(true)
-      console.log('Loading data for user:', userId)
 
-      // Load user's group
-      const groupRes = await fetch('/api/user/group')
-      console.log('Group response:', groupRes.status, groupRes.ok)
-      if (groupRes.ok) {
-        const group = await groupRes.json()
-        console.log('Group loaded:', group)
-        setMyGroup(group)
-        await db.habitGroups.put({
-          id: group.id,
-          userId: group.userId,
-          name: group.name,
-          shareToken: group.shareToken,
-          createdAt: new Date(group.createdAt),
-          updatedAt: new Date(group.updatedAt),
-        })
-      } else {
-        console.error('Failed to load group:', groupRes.status, await groupRes.text())
-      }
+      // 1. Load local data first (fast)
+      const localGroup = await getUserHabitGroup()
+      const localHabits = localGroup ? await db.habits.where('groupId').equals(localGroup.id).toArray() : []
+      const queue = await getSyncQueue()
 
-      // Load user's habits
-      const habitsRes = await fetch('/api/user/group/habits')
-      console.log('Habits response:', habitsRes.status, habitsRes.ok)
-      if (habitsRes.ok) {
-        const habits = await habitsRes.json()
-        console.log('Habits loaded:', habits)
-        setMyHabits(habits)
-      } else {
-        console.error('Failed to load habits:', habitsRes.status, await habitsRes.text())
-      }
+      // 2. Set local state with queue applied (no flicker!)
+      setBaseHabits(localHabits)
+      setPendingActions(queue.actions)
+      setMyGroup(localGroup || null)
+      initialLoadDone.current = true
 
-      // Load followed groups
+      // 3. Then fetch from server
+      await syncWithServer()
+
+      // 4. Load followed groups
       await loadFollowedGroups()
     } catch (error) {
       console.error('Failed to load data:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const syncWithServer = async () => {
+    if (!userId || syncing) return
+
+    try {
+      setSyncing(true)
+
+      // Get pending actions
+      const queue = await getSyncQueue()
+
+      // Send to server
+      const res = await fetch('/api/user/group/habits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actions: queue.actions,
+          lastSyncAt: queue.lastSyncAt,
+        }),
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+
+        // Update base state with server response
+        setBaseHabits(data.habits)
+        await saveHabits(data.habits)
+
+        // Update group info
+        if (data.group) {
+          setMyGroup(data.group)
+          await saveHabitGroup(data.group)
+        }
+
+        // Remove synced actions from queue
+        if (queue.actions.length > 0) {
+          await removeActionsFromQueue(queue.actions)
+          setPendingActions([]) // Clear pending actions
+        }
+
+        // Update last sync timestamp
+        if (data.serverTimestamp) {
+          await updateLastSyncAt(data.serverTimestamp)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to sync with server:', error)
+    } finally {
+      setSyncing(false)
     }
   }
 
@@ -153,15 +208,9 @@ export default function HomePage() {
 
         // Save to IndexedDB
         for (const group of groups) {
-          await db.following.put({
-            id: group.id,
-            userId: userId!,
-            groupId: group.id,
-            groupUserId: group.userId,
-            groupName: group.name,
-            shareToken: group.shareToken,
+          await saveFollowedGroup({
+            ...group,
             followedAt: new Date(group.followedAt),
-            habits: group.habits,
           })
         }
       }
@@ -170,118 +219,102 @@ export default function HomePage() {
     }
   }
 
-  const handleMyHabitsChange = useCallback((updatedAllHabits: SectionedHabit[]) => {
-    // Filter to only user's own habits
-    const myUpdatedHabits = updatedAllHabits.filter(h => h.isOwner)
+  // Create an action and add to queue
+  const createAction = useCallback(async (action: Action) => {
+    // Add to queue
+    await addActionToQueue(action)
 
-    // Merge with existing myHabits based on timestamps to prevent race conditions
-    const mergedHabits = myHabits.map(existingHabit => {
-      const updatedHabit = myUpdatedHabits.find(h => h.id === existingHabit.id)
-      if (!updatedHabit) return existingHabit
-
-      // Merge completions, keeping the latest timestamp for each date
-      const mergedCompletions = { ...existingHabit.completions }
-      for (const [dateKey, completion] of Object.entries(updatedHabit.completions)) {
-        const existing = mergedCompletions[dateKey]
-        const incoming = completion as { completed: boolean; timestamp: number }
-
-        if (!existing || (incoming.timestamp > (existing as any).timestamp)) {
-          mergedCompletions[dateKey] = incoming
-        }
-      }
-
-      return {
-        ...existingHabit,
-        ...updatedHabit,
-        completions: mergedCompletions
-      }
+    // Update local state immediately (optimistic update)
+    setPendingActions(prev => {
+      const updated = [...prev, action].sort((a, b) => a.timestamp - b.timestamp)
+      return updated
     })
 
-    // Update myHabits state
-    setMyHabits(mergedHabits)
-
-    // Handle deleted habits
-    const newIds = new Set(mergedHabits.map(h => h.id))
-    const deletedIds = myHabits
-      .filter(h => !newIds.has(h.id))
-      .map(h => h.id)
-
-    // Update IndexedDB
-    for (const habit of mergedHabits) {
-      db.habits.put(habit)
-    }
-    for (const id of deletedIds) {
-      db.habits.delete(id)
-    }
-
-    // Sync to server
-    syncHabits(mergedHabits, deletedIds)
-  }, [myHabits, myGroup])
-
-  const syncHabits = async (habits: Habit[], deletedIds: string[]) => {
-    if (syncing || !myGroup) return
-
-    console.log('Syncing habits...', { habits, deletedIds })
-    setSyncing(true)
-    try {
-      const res = await fetch('/api/user/group/habits', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          habits: habits.map(h => ({ ...h, groupId: myGroup.id })),
-          deletedHabitIds: deletedIds,
-        }),
-      })
-
-      if (res.ok) {
-        const updated = await res.json()
-        console.log('Sync successful:', updated)
-        setMyHabits(updated)
-      } else {
-        console.error('Sync failed:', res.status, res.statusText)
-      }
-    } catch (error) {
-      console.error('Failed to sync habits:', error)
-    } finally {
-      setSyncing(false)
-    }
-  }
+    // Sync to server in background
+    syncWithServer()
+  }, [])
 
   const handleAddHabit = useCallback((name: string) => {
-    console.log('handleAddHabit called', { name, myGroup, myHabits })
-    if (!myGroup) {
-      console.error('Cannot add habit: myGroup is null')
-      return
-    }
+    if (!myGroup) return
 
-    const maxOrder = myHabits.reduce((max, h) => Math.max(max, h.order), -1)
-    const newHabit: SectionedHabit = {
+    const maxOrder = displayHabits.reduce((max, h) => Math.max(max, h.order), -1)
+
+    createAction({
+      type: 'create_habit',
       id: `local-${Date.now()}`,
-      groupId: myGroup.id,
       name,
-      completions: {},
       order: maxOrder + 1,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      groupName: myGroup.name,
-      isOwner: true,
-    }
-    console.log('Adding new habit:', newHabit)
+      timestamp: Date.now(),
+    })
+  }, [myGroup, displayHabits, createAction])
 
-    // Convert myHabits to SectionedHabit[] with proper properties
-    const myHabitsWithSection = myHabits.map(h => ({
-      ...h,
-      groupName: myGroup.name,
-      groupId: myGroup.id,
-      isOwner: true,
-    }))
-    handleMyHabitsChange([...myHabitsWithSection, newHabit])
-  }, [myHabits, myGroup, handleMyHabitsChange])
+  const handleToggleCompletion = useCallback((habitId: string, dateKey: string) => {
+    const habit = displayHabits.find(h => h.id === habitId)
+    if (!habit) return
+
+    const currentCompletion = habit.completions[dateKey]
+
+    createAction({
+      type: 'toggle_completion',
+      id: habitId,
+      dateKey,
+      completed: currentCompletion?.completed ? false : true,
+      timestamp: Date.now(),
+    })
+  }, [displayHabits, createAction])
+
+  const handleDeleteHabit = useCallback((habitId: string) => {
+    const habit = displayHabits.find(h => h.id === habitId)
+    if (!habit) return
+
+    createAction({
+      type: 'delete_habit',
+      id: habitId,
+      timestamp: Date.now(),
+    })
+  }, [displayHabits, createAction])
+
+  const handleRenameHabit = useCallback((habitId: string, newName: string) => {
+    const habit = displayHabits.find(h => h.id === habitId)
+    if (!habit) return
+
+    createAction({
+      type: 'rename_habit',
+      id: habitId,
+      name: newName,
+      timestamp: Date.now(),
+    })
+  }, [displayHabits, createAction])
+
+  const handleReorderHabit = useCallback((habitId: string, direction: 'up' | 'down') => {
+    const habit = displayHabits.find(h => h.id === habitId)
+    if (!habit) return
+
+    const habitIndex = displayHabits.findIndex(h => h.id === habitId)
+    if (habitIndex === -1) return
+
+    const targetIndex = direction === 'up' ? habitIndex - 1 : habitIndex + 1
+    if (targetIndex < 0 || targetIndex >= displayHabits.length) return
+
+    createAction({
+      type: 'reorder_habit',
+      id: habitId,
+      order: targetIndex,
+      timestamp: Date.now(),
+    })
+  }, [displayHabits, createAction])
 
   const handleSaveGroupName = async (newName: string) => {
     if (!newName.trim() || !myGroup) return
 
     try {
+      createAction({
+        type: 'rename_group',
+        name: newName.trim(),
+        timestamp: Date.now(),
+      })
+
+      // Also update via API for immediate feedback
       const res = await fetch('/api/user/group', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -381,13 +414,25 @@ export default function HomePage() {
           </div>
         </div>
 
+        {/* Sync indicator */}
+        {syncing && (
+          <div className="mx-4 mb-2 text-xs text-zinc-400 flex items-center gap-1">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Syncing...
+          </div>
+        )}
+
         {/* Unified Habit Grid */}
         <HabitGrid
           habits={allHabits}
-          onHabitsChange={handleMyHabitsChange}
+          onHabitsChange={() => {}} // No-op, we use action callbacks
           onAddHabit={handleAddHabit}
           myGroupId={myGroup?.id || null}
           onUnfollow={handleUnfollow}
+          onToggleCompletion={handleToggleCompletion}
+          onDelete={handleDeleteHabit}
+          onRename={handleRenameHabit}
+          onReorder={handleReorderHabit}
         />
       </div>
 

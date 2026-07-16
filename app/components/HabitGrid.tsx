@@ -15,20 +15,28 @@ interface SectionedHabit extends Habit {
 
 interface HabitGridProps {
   habits: SectionedHabit[]
-  onHabitsChange: (habits: SectionedHabit[]) => void
-  onAddHabit: (name: string, group: string) => void
+  onHabitsChange: (habits: SectionedHabit[]) => void // Kept for compatibility but unused
+  onAddHabit: (name: string) => void
   myGroupId: string | null
   onUnfollow: (groupId: string) => void
+  onToggleCompletion?: (habitId: string, dateKey: string) => void
+  onDelete?: (habitId: string) => void
+  onRename?: (habitId: string, newName: string) => void
+  onReorder?: (habitId: string, direction: 'up' | 'down') => void
 }
 
-export default function HabitGrid({ habits, onHabitsChange, onAddHabit, myGroupId, onUnfollow }: HabitGridProps) {
+export default function HabitGrid({
+  habits,
+  onHabitsChange,
+  onAddHabit,
+  myGroupId,
+  onUnfollow,
+  onToggleCompletion,
+  onDelete,
+  onRename,
+  onReorder,
+}: HabitGridProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const habitsRef = useRef<SectionedHabit[]>(habits)
-
-  // Keep the ref in sync with the latest habits
-  useEffect(() => {
-    habitsRef.current = habits
-  }, [habits])
 
   // Month selection state
   const today = new Date()
@@ -128,80 +136,38 @@ export default function HabitGrid({ habits, onHabitsChange, onAddHabit, myGroupI
 
   // Memoize callbacks to prevent unnecessary re-renders
   const handleToggleCompletion = useCallback((habitId: string, dateKey: string) => {
-    // Use ref to always get the latest habits
-    const currentHabits = habitsRef.current
-    const habit = currentHabits.find(h => h.id === habitId)
-    if (!habit || !habit.isOwner) return
+    if (!onToggleCompletion) return
+    onToggleCompletion(habitId, dateKey)
+  }, [onToggleCompletion])
 
-    const now = Date.now()
-    const currentCompletion = habit.completions[dateKey]
-
-    const updatedHabits = currentHabits.map(h => {
-      if (h.id === habitId) {
-        const completions = { ...h.completions }
-        // Store timestamp with completion - prevents race conditions
-        completions[dateKey] = {
-          completed: currentCompletion?.completed ? false : true,
-          timestamp: now
-        }
-        return { ...h, completions, updatedAt: new Date() }
-      }
-      return h
-    })
-    onHabitsChange(updatedHabits)
-  }, [])
-
-  const handleDeleteHabit = useCallback((habitId: string) => {
-    const currentHabits = habitsRef.current
-    const habit = currentHabits.find(h => h.id === habitId)
+  const handleDelete = useCallback((habitId: string) => {
+    if (!onDelete) return
+    const habit = habits.find(h => h.id === habitId)
     if (habit && habit.isOwner) {
       setHabitToDelete(habit)
     }
-  }, [])
+  }, [onDelete, habits])
 
   const confirmDelete = useCallback(() => {
-    if (habitToDelete && habitToDelete.isOwner) {
-      onHabitsChange(habitsRef.current.filter(h => h.id !== habitToDelete.id))
+    if (habitToDelete && onDelete) {
+      onDelete(habitToDelete.id)
       setHabitToDelete(null)
     }
-  }, [habitToDelete, onHabitsChange])
+  }, [habitToDelete, onDelete])
 
   const cancelDelete = useCallback(() => {
     setHabitToDelete(null)
   }, [])
 
-  const handleRenameHabit = useCallback((habitId: string, newName: string) => {
-    const currentHabits = habitsRef.current
-    const habit = currentHabits.find(h => h.id === habitId)
-    if (!habit || !habit.isOwner) return
+  const handleRename = useCallback((habitId: string, newName: string) => {
+    if (!onRename) return
+    onRename(habitId, newName)
+  }, [onRename])
 
-    const updatedHabits = currentHabits.map(h =>
-      h.id === habitId ? { ...h, name: newName, updatedAt: new Date() } : h
-    )
-    onHabitsChange(updatedHabits)
-  }, [onHabitsChange])
-
-  const handleReorderHabit = useCallback((habitId: string, direction: 'up' | 'down') => {
-    const currentHabits = habitsRef.current
-    const habit = currentHabits.find(h => h.id === habitId)
-    if (!habit || !habit.isOwner) return
-
-    const habitIndex = currentHabits.findIndex(h => h.id === habitId)
-    if (habitIndex === -1) return
-
-    const newHabits = [...currentHabits]
-    const targetIndex = direction === 'up' ? habitIndex - 1 : habitIndex + 1
-
-    if (targetIndex < 0 || targetIndex >= currentHabits.length) return
-
-    [newHabits[habitIndex], newHabits[targetIndex]] = [newHabits[targetIndex], newHabits[habitIndex]]
-
-    newHabits.forEach((h, index) => {
-      h.order = index
-    })
-
-    onHabitsChange(newHabits)
-  }, [onHabitsChange])
+  const handleReorder = useCallback((habitId: string, direction: 'up' | 'down') => {
+    if (!onReorder) return
+    onReorder(habitId, direction)
+  }, [onReorder])
 
   return (
     <div className="w-full" onClick={() => setActiveGroupId(null)}>
@@ -280,9 +246,9 @@ export default function HabitGrid({ habits, onHabitsChange, onAddHabit, myGroupI
                   habit={habit}
                   dates={dates}
                   onToggleCompletion={handleToggleCompletion}
-                  onDelete={handleDeleteHabit}
-                  onRename={handleRenameHabit}
-                  onReorder={handleReorderHabit}
+                  onDelete={handleDelete}
+                  onRename={handleRename}
+                  onReorder={handleReorder}
                   isOwner={habit.isOwner}
                 />
               </React.Fragment>
