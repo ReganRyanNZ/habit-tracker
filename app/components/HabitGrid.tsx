@@ -216,14 +216,13 @@ export default function HabitGrid({
                 {sectionIndices.has(index) && (
                   <tr className="h-12">
                     <td
-                      colSpan={dates.length + 1}
-                      className="p-0 sticky left-0 bg-zinc-50 z-10"
+                      className="p-0 min-w-[120px] sticky left-0 bg-zinc-50 z-10"
                       onClick={(e) => {
                         e.stopPropagation()
                         setActiveGroupId(activeGroupId === habit.groupId ? null : habit.groupId)
                       }}
                     >
-                      <div className="flex items-center justify-between px-4 h-full cursor-pointer">
+                      <div className="flex items-center justify-between h-full px-4 cursor-pointer">
                         <span className="text-sm font-semibold text-zinc-600">{habit.groupName}</span>
                         {activeGroupId === habit.groupId && (
                           <Button
@@ -240,6 +239,7 @@ export default function HabitGrid({
                         )}
                       </div>
                     </td>
+                    <td colSpan={dates.length} className="p-0 bg-zinc-50"></td>
                   </tr>
                 )}
                 {/* Habit row */}

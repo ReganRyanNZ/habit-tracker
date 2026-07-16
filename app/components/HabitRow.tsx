@@ -133,11 +133,15 @@ export default function HabitRow({ habit, dates, onToggleCompletion, onDelete, o
               onClick={() => onToggleCompletion(habit.id, dateKey)}
               disabled={!isOwner}
               className={`w-7 h-7 rounded-full mx-auto transition-all ${
-                !isOwner ? 'cursor-not-allowed' : ''
+                !isOwner && !isCompleted ? 'opacity-60' : ''
               } ${
                 isCompleted
-                  ? 'bg-green-500 hover:bg-green-600'
-                  : 'bg-gray-200 hover:bg-gray-300'
+                  ? 'bg-green-500'
+                  : 'bg-gray-200'
+              } ${isOwner && isCompleted ? 'hover:bg-green-600' : ''} ${
+                isOwner && !isCompleted ? 'hover:bg-gray-300' : ''
+              } ${
+                !isOwner ? 'cursor-not-allowed' : ''
               }`}
               aria-label={`Toggle ${habit.name} for ${dateKey}`}
             />
