@@ -55,6 +55,7 @@ export default function HomePage() {
   const [isEditingName, setIsEditingName] = useState(false)
   const [showShareDialog, setShowShareDialog] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [isOnline, setIsOnline] = useState(true)
 
   // Track syncing state to prevent concurrent syncs
   const syncingRef = useRef(false)
@@ -96,61 +97,44 @@ export default function HomePage() {
     return sections
   }, [displayHabits, myGroup, followedGroups])
 
-  // Load data on mount
+  // Track online/offline status
   useEffect(() => {
-    if (!isLoaded) return
+    const handleOnline = () => setIsOnline(true)
+    const handleOffline = () => setIsOnline(false)
 
-    // Redirect to sign-in if not authenticated
-    if (!userId) {
-      window.location.href = '/sign-in'
-      return
-    }
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
 
-    loadData()
-  }, [isLoaded, userId])
-
-  // Poll for updates to followed groups every 30s
-  useEffect(() => {
-    if (!userId) return
-
-    const interval = setInterval(() => {
-      loadFollowedGroups()
-    }, 30000)
+    // Set initial state
+    setIsOnline(navigator.onLine)
 
     return () => {
-      clearInterval(interval)
-      syncingRef.current = false // Reset sync flag on unmount
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
     }
-  }, [userId])
+  }, [])
 
-  const loadData = async () => {
-    if (!userId) return
+  // Define all async functions first (before useEffects that use them)
 
+  const loadFollowedGroups = useCallback(async () => {
     try {
-      setLoading(true)
+      const res = await fetch('/api/user/following')
+      if (res.ok) {
+        const groups = await res.json()
+        setFollowedGroups(groups)
 
-      // 1. Load local data first (fast)
-      const localGroup = await getUserHabitGroup()
-      const localHabits = localGroup ? await db.habits.where('groupId').equals(localGroup.id).toArray() : []
-      const queue = await getSyncQueue()
-
-      // 2. Set local state with queue applied (no flicker!)
-      setBaseHabits(localHabits)
-      setPendingActions(queue.actions)
-      setMyGroup(localGroup || null)
-
-      // 3. Then fetch from server
-      await syncWithServer()
-
-      // 4. Load followed groups
-      await loadFollowedGroups()
+        // Save to IndexedDB
+        for (const group of groups) {
+          await saveFollowedGroup({
+            ...group,
+            followedAt: new Date(group.followedAt),
+          })
+        }
+      }
     } catch (error) {
-      console.error('Failed to load data:', error)
-      // Still show the data we have (even if incomplete)
-    } finally {
-      setLoading(false)
+      console.error('Failed to load followed groups:', error)
     }
-  }
+  }, [saveFollowedGroup])
 
   const syncWithServer = useCallback(async () => {
     if (!userId || syncingRef.current) return
@@ -204,25 +188,70 @@ export default function HomePage() {
     }
   }, [userId])
 
-  const loadFollowedGroups = async () => {
-    try {
-      const res = await fetch('/api/user/following')
-      if (res.ok) {
-        const groups = await res.json()
-        setFollowedGroups(groups)
+  const loadData = useCallback(async () => {
+    if (!userId) return
 
-        // Save to IndexedDB
-        for (const group of groups) {
-          await saveFollowedGroup({
-            ...group,
-            followedAt: new Date(group.followedAt),
-          })
-        }
-      }
+    try {
+      setLoading(true)
+
+      // 1. Load local data first (fast)
+      const localGroup = await getUserHabitGroup()
+      const localHabits = localGroup ? await db.habits.where('groupId').equals(localGroup.id).toArray() : []
+      const queue = await getSyncQueue()
+
+      // 2. Set local state with queue applied (no flicker!)
+      setBaseHabits(localHabits)
+      setPendingActions(queue.actions)
+      setMyGroup(localGroup || null)
+
+      // 3. Then fetch from server
+      await syncWithServer()
+
+      // 4. Load followed groups
+      await loadFollowedGroups()
     } catch (error) {
-      console.error('Failed to load followed groups:', error)
+      console.error('Failed to load data:', error)
+      // Still show the data we have (even if incomplete)
+    } finally {
+      setLoading(false)
     }
-  }
+  }, [userId, syncWithServer, loadFollowedGroups])
+
+  // Load data on mount
+  useEffect(() => {
+    if (!isLoaded) return
+
+    // Redirect to sign-in if not authenticated
+    if (!userId) {
+      window.location.href = '/sign-in'
+      return
+    }
+
+    loadData()
+  }, [isLoaded, userId, loadData])
+
+  // Poll for updates to followed groups every 30s, and sync when coming back online
+  useEffect(() => {
+    if (!userId) return
+
+    const interval = setInterval(() => {
+      loadFollowedGroups()
+    }, 30000)
+
+    // Sync when coming back online
+    const handleOnline = () => {
+      console.log('Back online, syncing...')
+      syncWithServer()
+    }
+
+    window.addEventListener('online', handleOnline)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('online', handleOnline)
+      syncingRef.current = false // Reset sync flag on unmount
+    }
+  }, [userId, syncWithServer, loadFollowedGroups])
 
   // Create an action and add to queue
   const createAction = useCallback(async (action: Action) => {
@@ -237,7 +266,7 @@ export default function HomePage() {
 
     // Sync to server in background
     syncWithServer()
-  }, [])
+  }, [syncWithServer])
 
   const handleAddHabit = useCallback((name: string) => {
     if (!myGroup) return
@@ -419,13 +448,29 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Sync indicator */}
-        {syncing && (
-          <div className="mx-4 mb-2 text-xs text-zinc-400 flex items-center gap-1">
-            <Loader2 className="h-3 w-3 animate-spin" />
-            Syncing...
-          </div>
-        )}
+        {/* Status indicators */}
+        <div className="mx-4 mb-2 flex items-center gap-3 text-xs">
+          {syncing && (
+            <div className="text-zinc-400 flex items-center gap-1">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Syncing...
+            </div>
+          )}
+          {!isOnline && (
+            <div className="text-amber-600 flex items-center gap-1">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M1 1l22 22"/>
+                <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/>
+                <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.54"/>
+                <path d="M10.71 5.05A16 16 0 0 1 22.58 9"/>
+                <path d="M1.42 9a16 16 0 0 1 10.58-3.95"/>
+                <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+                <path d="M12 20h.01"/>
+              </svg>
+              Offline - Changes will sync when online
+            </div>
+          )}
+        </div>
 
         {/* Unified Habit Grid */}
         <HabitGrid
