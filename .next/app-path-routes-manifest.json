@@ -1,7 +1,0 @@
-{
-  "/api/sheet/[slug]/route": "/api/sheet/[slug]",
-  "/api/sheet/route": "/api/sheet",
-  "/_not-found/page": "/_not-found",
-  "/[slug]/page": "/[slug]",
-  "/page": "/"
-}
