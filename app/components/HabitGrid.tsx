@@ -54,6 +54,7 @@ export default function HabitGrid({
 
   // Sort habits: first by group (my group first, then followed groups), then by order within each group
   const sortedHabits = useMemo(() => {
+    if (!habits || habits.length === 0) return []
     return [...habits].sort((a, b) => {
       // My group always comes first
       if (a.isOwner && !b.isOwner) return -1

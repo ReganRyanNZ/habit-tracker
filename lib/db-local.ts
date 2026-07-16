@@ -54,6 +54,15 @@ export class HabitDatabase extends Dexie {
 
   constructor() {
     super('HabitTrackerDB')
+    this.version(1).stores({
+      habitGroups: 'id, userId, shareToken, updatedAt',
+      habits: 'id, groupId, order, updatedAt',
+      following: 'id, userId, groupId, groupUserId, shareToken',
+      syncQueue: '++id, type, groupId, timestamp'
+    }).upgrade(tx => {
+      // Clear old syncQueue data during upgrade
+      tx.table('syncQueue').clear()
+    })
     this.version(2).stores({
       habitGroups: 'id, userId, shareToken, updatedAt',
       habits: 'id, groupId, order, updatedAt',
@@ -71,8 +80,17 @@ export const db = new HabitDatabase()
 
 // Get the sync queue (there should only be one record)
 export async function getSyncQueue(): Promise<SyncQueue> {
-  const queue = await db.syncQueue.toCollection().first()
-  return queue || { actions: [], lastSyncAt: 0 }
+  try {
+    const queue = await db.syncQueue.toCollection().first()
+    // Ensure we always have a valid queue object with arrays
+    if (queue && Array.isArray(queue.actions)) {
+      return queue
+    }
+    return { actions: [], lastSyncAt: 0 }
+  } catch (error) {
+    console.error('Error getting sync queue:', error)
+    return { actions: [], lastSyncAt: 0 }
+  }
 }
 
 // Add actions to the queue
@@ -235,6 +253,8 @@ function applyActionToHabits(habits: Habit[], action: Action): Habit[] {
 
 // Apply multiple actions to habits
 export function applyActionsToHabits(habits: Habit[], actions: Action[]): Habit[] {
+  if (!habits) habits = []
+  if (!actions) actions = []
   let result = habits
   for (const action of actions) {
     result = applyActionToHabits(result, action)

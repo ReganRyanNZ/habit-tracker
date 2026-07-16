@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { Plus, Share2, Loader2 } from 'lucide-react'
 import {
   db,
-  clearAllData,
   getUserHabitGroup,
   getFollowedGroups,
   addActionToQueue,
@@ -57,12 +56,12 @@ export default function HomePage() {
   const [showShareDialog, setShowShareDialog] = useState(false)
   const [syncing, setSyncing] = useState(false)
 
-  // Track if we've loaded initial data
-  const initialLoadDone = useRef(false)
+  // Track syncing state to prevent concurrent syncs
+  const syncingRef = useRef(false)
 
   // Computed display state: base habits + pending actions
   const displayHabits = useMemo(() => {
-    return applyActionsToHabits(baseHabits, pendingActions)
+    return applyActionsToHabits(baseHabits || [], pendingActions || [])
   }, [baseHabits, pendingActions])
 
   // Combine all habits with section information
@@ -83,7 +82,8 @@ export default function HomePage() {
 
     // Add followed groups' habits
     followedGroups.forEach(group => {
-      group.habits.forEach(habit => {
+      const habits = group.habits || []
+      habits.forEach(habit => {
         sections.push({
           ...habit,
           groupName: group.name,
@@ -117,7 +117,10 @@ export default function HomePage() {
       loadFollowedGroups()
     }, 30000)
 
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      syncingRef.current = false // Reset sync flag on unmount
+    }
   }, [userId])
 
   const loadData = async () => {
@@ -135,7 +138,6 @@ export default function HomePage() {
       setBaseHabits(localHabits)
       setPendingActions(queue.actions)
       setMyGroup(localGroup || null)
-      initialLoadDone.current = true
 
       // 3. Then fetch from server
       await syncWithServer()
@@ -144,15 +146,17 @@ export default function HomePage() {
       await loadFollowedGroups()
     } catch (error) {
       console.error('Failed to load data:', error)
+      // Still show the data we have (even if incomplete)
     } finally {
       setLoading(false)
     }
   }
 
-  const syncWithServer = async () => {
-    if (!userId || syncing) return
+  const syncWithServer = useCallback(async () => {
+    if (!userId || syncingRef.current) return
 
     try {
+      syncingRef.current = true
       setSyncing(true)
 
       // Get pending actions
@@ -195,9 +199,10 @@ export default function HomePage() {
     } catch (error) {
       console.error('Failed to sync with server:', error)
     } finally {
+      syncingRef.current = false
       setSyncing(false)
     }
-  }
+  }, [userId])
 
   const loadFollowedGroups = async () => {
     try {

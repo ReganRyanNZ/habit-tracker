@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/db'
+import { randomUUID } from 'crypto'
 
 // Action type definition (must match client)
 type Action =
@@ -50,13 +51,20 @@ export async function POST(request: NextRequest) {
   try {
     const { actions, lastSyncAt } = await request.json()
 
-    // Get user's group
-    const group = await prisma.habitGroup.findUnique({
+    // Get or create user's group
+    let group = await prisma.habitGroup.findUnique({
       where: { userId },
     })
 
+    // Create group if it doesn't exist
     if (!group) {
-      return NextResponse.json({ error: 'Group not found' }, { status: 404 })
+      group = await prisma.habitGroup.create({
+        data: {
+          userId,
+          name: 'My Habits',
+          shareToken: randomUUID(),
+        },
+      })
     }
 
     // Sort actions by timestamp and apply them sequentially
@@ -187,6 +195,14 @@ async function applyActionToDatabase(action: Action, groupId: string): Promise<v
           )
         )
       }
+      break
+    }
+
+    case 'rename_group': {
+      await prisma.habitGroup.update({
+        where: { id: groupId },
+        data: { name: action.name },
+      })
       break
     }
   }
