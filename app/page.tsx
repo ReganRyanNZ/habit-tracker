@@ -448,29 +448,21 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Status indicators */}
-        <div className="mx-4 mb-2 flex items-center gap-3 text-xs">
-          {syncing && (
-            <div className="text-zinc-400 flex items-center gap-1">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              Syncing...
-            </div>
-          )}
-          {!isOnline && (
-            <div className="text-amber-600 flex items-center gap-1">
-              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M1 1l22 22"/>
-                <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/>
-                <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.54"/>
-                <path d="M10.71 5.05A16 16 0 0 1 22.58 9"/>
-                <path d="M1.42 9a16 16 0 0 1 10.58-3.95"/>
-                <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
-                <path d="M12 20h.01"/>
-              </svg>
-              Offline - Changes will sync when online
-            </div>
-          )}
-        </div>
+        {/* Offline indicator */}
+        {!isOnline && (
+          <div className="mx-4 mb-2 text-xs text-amber-600 flex items-center gap-1">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M1 1l22 22"/>
+              <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/>
+              <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.54"/>
+              <path d="M10.71 5.05A16 16 0 0 1 22.58 9"/>
+              <path d="M1.42 9a16 16 0 0 1 10.58-3.95"/>
+              <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+              <path d="M12 20h.01"/>
+            </svg>
+            Offline - Changes will sync when online
+          </div>
+        )}
 
         {/* Unified Habit Grid */}
         <HabitGrid
