@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useAuth, UserButton } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
 import { Plus, Share2, Loader2, UserMinus } from 'lucide-react'
@@ -24,6 +24,12 @@ interface FollowedGroup {
   habits: Habit[]
 }
 
+interface SectionedHabit extends Habit {
+  groupName: string
+  groupId: string
+  isOwner: boolean
+}
+
 export default function HomePage() {
   const { userId, isLoaded } = useAuth()
   const [loading, setLoading] = useState(true)
@@ -36,6 +42,37 @@ export default function HomePage() {
 
   const habitsRef = useRef<Habit[]>([])
   useEffect(() => { habitsRef.current = myHabits }, [myHabits])
+
+  // Combine all habits with section information
+  const allHabits = useMemo(() => {
+    const sections: SectionedHabit[] = []
+
+    // Add my habits
+    if (myGroup) {
+      myHabits.forEach(habit => {
+        sections.push({
+          ...habit,
+          groupName: myGroup.name,
+          groupId: myGroup.id,
+          isOwner: true,
+        })
+      })
+    }
+
+    // Add followed groups' habits
+    followedGroups.forEach(group => {
+      group.habits.forEach(habit => {
+        sections.push({
+          ...habit,
+          groupName: group.name,
+          groupId: group.id,
+          isOwner: false,
+        })
+      })
+    })
+
+    return sections
+  }, [myHabits, myGroup, followedGroups])
 
   // Load data on mount
   useEffect(() => {
@@ -133,16 +170,44 @@ export default function HomePage() {
     }
   }
 
-  const handleMyHabitsChange = useCallback((updatedHabits: Habit[]) => {
-    const newIds = new Set(updatedHabits.map(h => h.id))
+  const handleMyHabitsChange = useCallback((updatedAllHabits: SectionedHabit[]) => {
+    // Filter to only user's own habits
+    const myUpdatedHabits = updatedAllHabits.filter(h => h.isOwner)
+
+    // Merge with existing myHabits based on timestamps to prevent race conditions
+    const mergedHabits = myHabits.map(existingHabit => {
+      const updatedHabit = myUpdatedHabits.find(h => h.id === existingHabit.id)
+      if (!updatedHabit) return existingHabit
+
+      // Merge completions, keeping the latest timestamp for each date
+      const mergedCompletions = { ...existingHabit.completions }
+      for (const [dateKey, completion] of Object.entries(updatedHabit.completions)) {
+        const existing = mergedCompletions[dateKey]
+        const incoming = completion as { completed: boolean; timestamp: number }
+
+        if (!existing || (incoming.timestamp > (existing as any).timestamp)) {
+          mergedCompletions[dateKey] = incoming
+        }
+      }
+
+      return {
+        ...existingHabit,
+        ...updatedHabit,
+        completions: mergedCompletions
+      }
+    })
+
+    // Update myHabits state
+    setMyHabits(mergedHabits)
+
+    // Handle deleted habits
+    const newIds = new Set(mergedHabits.map(h => h.id))
     const deletedIds = myHabits
       .filter(h => !newIds.has(h.id))
       .map(h => h.id)
 
-    setMyHabits(updatedHabits)
-
     // Update IndexedDB
-    for (const habit of updatedHabits) {
+    for (const habit of mergedHabits) {
       db.habits.put(habit)
     }
     for (const id of deletedIds) {
@@ -150,8 +215,8 @@ export default function HomePage() {
     }
 
     // Sync to server
-    syncHabits(updatedHabits, deletedIds)
-  }, [myHabits])
+    syncHabits(mergedHabits, deletedIds)
+  }, [myHabits, myGroup])
 
   const syncHabits = async (habits: Habit[], deletedIds: string[]) => {
     if (syncing || !myGroup) return
@@ -190,7 +255,7 @@ export default function HomePage() {
     }
 
     const maxOrder = myHabits.reduce((max, h) => Math.max(max, h.order), -1)
-    const newHabit: Habit = {
+    const newHabit: SectionedHabit = {
       id: `local-${Date.now()}`,
       groupId: myGroup.id,
       name,
@@ -198,9 +263,19 @@ export default function HomePage() {
       order: maxOrder + 1,
       createdAt: new Date(),
       updatedAt: new Date(),
+      groupName: myGroup.name,
+      isOwner: true,
     }
     console.log('Adding new habit:', newHabit)
-    handleMyHabitsChange([...myHabits, newHabit])
+
+    // Convert myHabits to SectionedHabit[] with proper properties
+    const myHabitsWithSection = myHabits.map(h => ({
+      ...h,
+      groupName: myGroup.name,
+      groupId: myGroup.id,
+      isOwner: true,
+    }))
+    handleMyHabitsChange([...myHabitsWithSection, newHabit])
   }, [myHabits, myGroup, handleMyHabitsChange])
 
   const handleSaveGroupName = async (newName: string) => {
@@ -272,7 +347,7 @@ export default function HomePage() {
         {/* Header */}
         <div className="flex justify-between items-center mb-7 mx-4 gap-2">
           <div className="flex items-center gap-2 flex-1">
-            <UserButton afterSignOutUrl="/" />
+            <UserButton />
             {isEditingName ? (
               <input
                 type="text"
@@ -299,52 +374,21 @@ export default function HomePage() {
             </button>
           </div>
           <div className="flex items-center gap-1">
-            <AddHabitDialog onAdd={handleAddHabit} existingGroups={[]} />
+            <AddHabitDialog onAdd={handleAddHabit} />
             <Button onClick={() => setShowShareDialog(true)} variant="outline" size="sm" className="gap-2 p-2">
               <Share2 className="h-4 w-4" />
             </Button>
           </div>
         </div>
 
-        {/* My Habits */}
-        {myGroup && (
-          <HabitGrid
-            habits={myHabits}
-            onHabitsChange={handleMyHabitsChange}
-            onAddHabit={handleAddHabit}
-            existingGroups={[]}
-            groupId={myGroup.id}
-            isOwner={true}
-          />
-        )}
-
-        {/* Followed Groups */}
-        {followedGroups.map(group => (
-          <div key={group.id} className="mt-8">
-            <div className="flex items-center justify-between mb-4 mx-4">
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-semibold text-zinc-700">{group.name}</h2>
-                <span className="text-xs text-zinc-400">View only</span>
-              </div>
-              <Button
-                onClick={() => handleUnfollow(group.id)}
-                variant="ghost"
-                size="sm"
-                className="text-zinc-400 hover:text-red-600"
-              >
-                <UserMinus className="h-4 w-4" />
-              </Button>
-            </div>
-            <HabitGrid
-              habits={group.habits}
-              onHabitsChange={() => {}}
-              onAddHabit={() => {}}
-              existingGroups={[]}
-              groupId={group.id}
-              isOwner={false}
-            />
-          </div>
-        ))}
+        {/* Unified Habit Grid */}
+        <HabitGrid
+          habits={allHabits}
+          onHabitsChange={handleMyHabitsChange}
+          onAddHabit={handleAddHabit}
+          myGroupId={myGroup?.id || null}
+          onUnfollow={handleUnfollow}
+        />
       </div>
 
       {/* Share Dialog */}

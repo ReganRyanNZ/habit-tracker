@@ -125,7 +125,7 @@ export default function HabitRow({ habit, dates, onToggleCompletion, onDelete, o
       </td>
       {dates.map((date, index) => {
         const dateKey = formatDateKey(date)
-        const isCompleted = habit.completions[dateKey]
+        const isCompleted = habit.completions[dateKey]?.completed || false
 
         return (
           <td key={date.toISOString()} className="text-center p-1">

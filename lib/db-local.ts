@@ -13,7 +13,7 @@ export interface Habit {
   id: string
   groupId: string
   name: string
-  completions: Record<string, boolean>
+  completions: Record<string, { completed: boolean; timestamp: number }>
   order: number
   createdAt: Date
   updatedAt: Date

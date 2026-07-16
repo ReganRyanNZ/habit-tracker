@@ -1,21 +1,34 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { Habit } from '@/lib/db-local'
 import { formatDate, formatDateKey, getMonthRange, getMonthName, isToday } from '@/lib/utils'
 import HabitRow from './HabitRow'
 import { Button } from '@/components/ui/button'
+import { UserMinus } from 'lucide-react'
 
-interface HabitGridProps {
-  habits: Habit[]
-  onHabitsChange: (habits: Habit[]) => void
-  onAddHabit: (name: string, group: string) => void
+interface SectionedHabit extends Habit {
+  groupName: string
   groupId: string
   isOwner: boolean
 }
 
-export default function HabitGrid({ habits, onHabitsChange, onAddHabit, groupId, isOwner }: HabitGridProps) {
+interface HabitGridProps {
+  habits: SectionedHabit[]
+  onHabitsChange: (habits: SectionedHabit[]) => void
+  onAddHabit: (name: string, group: string) => void
+  myGroupId: string | null
+  onUnfollow: (groupId: string) => void
+}
+
+export default function HabitGrid({ habits, onHabitsChange, onAddHabit, myGroupId, onUnfollow }: HabitGridProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const habitsRef = useRef<SectionedHabit[]>(habits)
+
+  // Keep the ref in sync with the latest habits
+  useEffect(() => {
+    habitsRef.current = habits
+  }, [habits])
 
   // Month selection state
   const today = new Date()
@@ -23,15 +36,48 @@ export default function HabitGrid({ habits, onHabitsChange, onAddHabit, groupId,
   const [selectedMonth, setSelectedMonth] = useState(today.getMonth())
 
   // Delete confirmation state
-  const [habitToDelete, setHabitToDelete] = useState<Habit | null>(null)
+  const [habitToDelete, setHabitToDelete] = useState<SectionedHabit | null>(null)
+
+  // Track which group section is active (for showing unfollow button)
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null)
 
   // Get dates for the selected month
   const dates = useMemo(() => getMonthRange(selectedYear, selectedMonth), [selectedYear, selectedMonth])
 
-  // Sort habits by order
+  // Sort habits: first by group (my group first, then followed groups), then by order within each group
   const sortedHabits = useMemo(() => {
-    return [...habits].sort((a, b) => a.order - b.order)
+    return [...habits].sort((a, b) => {
+      // My group always comes first
+      if (a.isOwner && !b.isOwner) return -1
+      if (!a.isOwner && b.isOwner) return 1
+
+      // Within the same group, sort by order
+      if (a.groupId === b.groupId) {
+        return a.order - b.order
+      }
+
+      // Different groups - sort by groupId for consistency
+      return a.groupId.localeCompare(b.groupId)
+    })
   }, [habits])
+
+  // Build flat habit list with section markers
+  const { flatHabits, sectionIndices } = useMemo(() => {
+    const flat: SectionedHabit[] = []
+    const indices: Set<number> = new Set()
+    let currentGroupId: string | null = null
+
+    sortedHabits.forEach((habit, index) => {
+      // Mark section change (but not for the first/my group)
+      if (currentGroupId !== null && currentGroupId !== habit.groupId) {
+        indices.add(index)
+      }
+      currentGroupId = habit.groupId
+      flat.push(habit)
+    })
+
+    return { flatHabits: flat, sectionIndices: indices }
+  }, [sortedHabits])
 
   // Find the index of today in the dates array for scrolling
   const todayIndex = useMemo(() => {
@@ -82,75 +128,90 @@ export default function HabitGrid({ habits, onHabitsChange, onAddHabit, groupId,
 
   // Memoize callbacks to prevent unnecessary re-renders
   const handleToggleCompletion = useCallback((habitId: string, dateKey: string) => {
-    if (!isOwner) return
+    // Use ref to always get the latest habits
+    const currentHabits = habitsRef.current
+    const habit = currentHabits.find(h => h.id === habitId)
+    if (!habit || !habit.isOwner) return
 
-    const updatedHabits = habits.map(habit => {
-      if (habit.id === habitId) {
-        const completions = { ...habit.completions }
-        completions[dateKey] = !completions[dateKey]
-        return { ...habit, completions, updatedAt: new Date() }
+    const now = Date.now()
+    const currentCompletion = habit.completions[dateKey]
+
+    const updatedHabits = currentHabits.map(h => {
+      if (h.id === habitId) {
+        const completions = { ...h.completions }
+        // Store timestamp with completion - prevents race conditions
+        completions[dateKey] = {
+          completed: currentCompletion?.completed ? false : true,
+          timestamp: now
+        }
+        return { ...h, completions, updatedAt: new Date() }
       }
-      return habit
+      return h
     })
     onHabitsChange(updatedHabits)
-  }, [habits, onHabitsChange, isOwner])
+  }, [])
 
   const handleDeleteHabit = useCallback((habitId: string) => {
-    if (!isOwner) return
-
-    const habit = habits.find(h => h.id === habitId)
-    if (habit) {
+    const currentHabits = habitsRef.current
+    const habit = currentHabits.find(h => h.id === habitId)
+    if (habit && habit.isOwner) {
       setHabitToDelete(habit)
     }
-  }, [habits, isOwner])
+  }, [])
 
   const confirmDelete = useCallback(() => {
-    if (habitToDelete && isOwner) {
-      onHabitsChange(habits.filter(h => h.id !== habitToDelete.id))
+    if (habitToDelete && habitToDelete.isOwner) {
+      onHabitsChange(habitsRef.current.filter(h => h.id !== habitToDelete.id))
       setHabitToDelete(null)
     }
-  }, [habitToDelete, habits, onHabitsChange, isOwner])
+  }, [habitToDelete, onHabitsChange])
 
   const cancelDelete = useCallback(() => {
     setHabitToDelete(null)
   }, [])
 
   const handleRenameHabit = useCallback((habitId: string, newName: string) => {
-    if (!isOwner) return
+    const currentHabits = habitsRef.current
+    const habit = currentHabits.find(h => h.id === habitId)
+    if (!habit || !habit.isOwner) return
 
-    const updatedHabits = habits.map(habit =>
-      habit.id === habitId ? { ...habit, name: newName, updatedAt: new Date() } : habit
+    const updatedHabits = currentHabits.map(h =>
+      h.id === habitId ? { ...h, name: newName, updatedAt: new Date() } : h
     )
     onHabitsChange(updatedHabits)
-  }, [habits, onHabitsChange, isOwner])
+  }, [onHabitsChange])
 
   const handleReorderHabit = useCallback((habitId: string, direction: 'up' | 'down') => {
-    if (!isOwner) return
+    const currentHabits = habitsRef.current
+    const habit = currentHabits.find(h => h.id === habitId)
+    if (!habit || !habit.isOwner) return
 
-    const habitIndex = habits.findIndex(h => h.id === habitId)
+    const habitIndex = currentHabits.findIndex(h => h.id === habitId)
     if (habitIndex === -1) return
 
-    const newHabits = [...habits]
+    const newHabits = [...currentHabits]
     const targetIndex = direction === 'up' ? habitIndex - 1 : habitIndex + 1
 
-    if (targetIndex < 0 || targetIndex >= habits.length) return
+    if (targetIndex < 0 || targetIndex >= currentHabits.length) return
 
     [newHabits[habitIndex], newHabits[targetIndex]] = [newHabits[targetIndex], newHabits[habitIndex]]
 
-    newHabits.forEach((habit, index) => {
-      habit.order = index
+    newHabits.forEach((h, index) => {
+      h.order = index
     })
 
     onHabitsChange(newHabits)
-  }, [habits, onHabitsChange, isOwner])
+  }, [onHabitsChange])
 
   return (
-    <div className="w-full">
+    <div className="w-full" onClick={() => setActiveGroupId(null)}>
+      {/* Scrollable container with the full table */}
       <div ref={scrollContainerRef} className="overflow-x-auto">
         <table className="w-full border-collapse">
-          <thead>
+          {/* Calendar header - sticky at top */}
+          <thead className="sticky top-0 z-20 bg-white">
             <tr>
-              <th className="text-left p-1 min-w-[120px] sticky left-0 bg-white z-10 shadow-[1px_0_4px_rgba(0,0,0,0.1)] text-xs font-medium">
+              <th className="text-left p-1 min-w-[120px] sticky left-0 bg-white z-30 shadow-[1px_0_4px_rgba(0,0,0,0.1)] text-xs font-medium">
                 <select
                   value={`${selectedYear}-${selectedMonth}`}
                   onChange={(e) => {
@@ -168,7 +229,7 @@ export default function HabitGrid({ habits, onHabitsChange, onAddHabit, groupId,
                 </select>
               </th>
               {dates.map(date => (
-                <th key={date.toISOString()} className="text-center p-1 min-w-[40px]">
+                <th key={date.toISOString()} className="text-center p-1 min-w-[40px] bg-white z-20">
                   <div className="flex flex-col items-center">
                     <span className={`text-xs font-medium ${isToday(date) ? 'text-blue-600' : 'text-gray-500'}`}>
                       {formatDate(date, 'day')}
@@ -182,17 +243,49 @@ export default function HabitGrid({ habits, onHabitsChange, onAddHabit, groupId,
             </tr>
           </thead>
           <tbody>
-            {sortedHabits.map(habit => (
-              <HabitRow
-                key={habit.id}
-                habit={habit}
-                dates={dates}
-                onToggleCompletion={handleToggleCompletion}
-                onDelete={handleDeleteHabit}
-                onRename={handleRenameHabit}
-                onReorder={handleReorderHabit}
-                isOwner={isOwner}
-              />
+            {flatHabits.map((habit, index) => (
+              <React.Fragment key={habit.id}>
+                {/* Section header row */}
+                {sectionIndices.has(index) && (
+                  <tr className="h-12">
+                    <td
+                      className="p-0 min-w-[120px] sticky left-0 bg-zinc-50 z-10"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setActiveGroupId(activeGroupId === habit.groupId ? null : habit.groupId)
+                      }}
+                    >
+                      <div className="flex items-center justify-between h-full px-4 cursor-pointer">
+                        <span className="text-sm font-semibold text-zinc-600">{habit.groupName}</span>
+                        {activeGroupId === habit.groupId && (
+                          <Button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onUnfollow(habit.groupId)
+                            }}
+                            variant="ghost"
+                            size="sm"
+                            className="text-zinc-400 hover:text-red-600 h-6 px-2"
+                          >
+                            <UserMinus className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                    <td colSpan={dates.length} className="p-0 bg-zinc-50"></td>
+                  </tr>
+                )}
+                {/* Habit row */}
+                <HabitRow
+                  habit={habit}
+                  dates={dates}
+                  onToggleCompletion={handleToggleCompletion}
+                  onDelete={handleDeleteHabit}
+                  onRename={handleRenameHabit}
+                  onReorder={handleReorderHabit}
+                  isOwner={habit.isOwner}
+                />
+              </React.Fragment>
             ))}
           </tbody>
         </table>

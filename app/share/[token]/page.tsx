@@ -158,11 +158,16 @@ export default function SharePage({ params }: { params: Promise<{ token: string 
 
         {/* Habits - view only */}
         <HabitGrid
-          habits={group.habits}
+          habits={group.habits.map(h => ({
+            ...h,
+            groupName: group.name,
+            groupId: group.id,
+            isOwner: false,
+          }))}
           onHabitsChange={() => {}}
           onAddHabit={() => {}}
-          groupId={group.id}
-          isOwner={false}
+          myGroupId={null}
+          onUnfollow={() => {}}
         />
       </div>
     </div>

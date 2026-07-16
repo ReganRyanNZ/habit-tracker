@@ -60,13 +60,46 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Upsert habits
+    // Upsert habits with timestamp-based merge
     if (habits && habits.length > 0) {
       for (const habit of habits) {
         const { id, name, completions, order, createdAt, updatedAt } = habit
 
-        // Convert completions object to string
-        const completionsStr = JSON.stringify(completions || {})
+        const existingHabit = await prisma.habit.findUnique({
+          where: { id },
+        })
+
+        let mergedCompletions = completions || {}
+
+        // Merge with existing completions, keeping the latest timestamp for each date
+        if (existingHabit && existingHabit.completions) {
+          const existingCompletions = JSON.parse(existingHabit.completions || '{}')
+
+          // For each date, keep the one with the latest timestamp
+          for (const dateKey of new Set([
+            ...Object.keys(existingCompletions),
+            ...Object.keys(mergedCompletions)
+          ])) {
+            const existing = existingCompletions[dateKey]
+            const incoming = mergedCompletions[dateKey]
+
+            if (!incoming) {
+              mergedCompletions[dateKey] = existing
+            } else if (!existing) {
+              // No existing completion, use incoming
+            } else if (existing.timestamp && incoming.timestamp) {
+              // Both have timestamps - use the latest
+              if (existing.timestamp > incoming.timestamp) {
+                mergedCompletions[dateKey] = existing
+              }
+            } else if (existing.timestamp && !incoming.timestamp) {
+              // Existing has timestamp, incoming doesn't - keep existing
+              mergedCompletions[dateKey] = existing
+            }
+          }
+        }
+
+        const completionsStr = JSON.stringify(mergedCompletions)
 
         await prisma.habit.upsert({
           where: { id },
