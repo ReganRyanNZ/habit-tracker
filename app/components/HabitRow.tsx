@@ -133,7 +133,7 @@ export default function HabitRow({ habit, dates, onToggleCompletion, onDelete, o
               onClick={() => onToggleCompletion(habit.id, dateKey)}
               disabled={!isOwner}
               className={`w-7 h-7 rounded-full mx-auto transition-all ${
-                !isOwner ? 'cursor-not-allowed opacity-70' : ''
+                !isOwner ? 'cursor-not-allowed' : ''
               } ${
                 isCompleted
                   ? 'bg-green-500 hover:bg-green-600'
