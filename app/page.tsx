@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useAuth, UserButton } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
-import { Plus, Share2 } from 'lucide-react'
+import { Plus, Share2, Loader2 } from 'lucide-react'
 import {
   db,
   getUserHabitGroup,
