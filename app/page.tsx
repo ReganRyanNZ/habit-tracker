@@ -48,6 +48,7 @@ interface SectionedHabit extends Habit {
 export default function HomePage() {
   const { userId, isLoaded } = useAuth()
   const [loading, setLoading] = useState(true)
+  const [hasGroup, setHasGroup] = useState(false) // Track if user has a confirmed group
   const [baseHabits, setBaseHabits] = useState<Habit[]>([]) // Base state from server/cache
   const [pendingActions, setPendingActions] = useState<Action[]>([]) // Local actions
   const [followedGroups, setFollowedGroups] = useState<FollowedGroup[]>([])
@@ -166,6 +167,7 @@ export default function HomePage() {
         // Update group info
         if (data.group) {
           setMyGroup(data.group)
+          setHasGroup(true)
           await saveHabitGroup(data.group)
         }
 
@@ -203,8 +205,9 @@ export default function HomePage() {
       setBaseHabits(localHabits)
       setPendingActions(queue.actions)
       setMyGroup(localGroup || null)
+      setHasGroup(!!localGroup)
 
-      // 3. Then fetch from server
+      // 3. Then fetch from server (this creates the group for new users)
       await syncWithServer()
 
       // 4. Load followed groups
@@ -269,7 +272,7 @@ export default function HomePage() {
   }, [syncWithServer])
 
   const handleAddHabit = useCallback((name: string) => {
-    if (!myGroup) return
+    if (!hasGroup) return
 
     const maxOrder = displayHabits.reduce((max, h) => Math.max(max, h.order), -1)
 
@@ -280,7 +283,7 @@ export default function HomePage() {
       order: maxOrder + 1,
       timestamp: Date.now(),
     })
-  }, [myGroup, displayHabits, createAction])
+  }, [hasGroup, displayHabits, createAction])
 
   const handleToggleCompletion = useCallback((habitId: string, dateKey: string) => {
     const habit = displayHabits.find(h => h.id === habitId)
