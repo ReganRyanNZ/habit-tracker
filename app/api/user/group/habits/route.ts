@@ -58,13 +58,21 @@ export async function POST(request: NextRequest) {
 
     // Create group if it doesn't exist
     if (!group) {
-      group = await prisma.habitGroup.create({
-        data: {
-          userId,
-          name: 'My Habits',
-          shareToken: randomUUID(),
-        },
-      })
+      try {
+        group = await prisma.habitGroup.create({
+          data: {
+            userId,
+            name: 'My Habits',
+            shareToken: randomUUID(),
+          },
+        })
+      } catch (createError) {
+        console.error('Failed to create habit group:', createError)
+        return NextResponse.json(
+          { error: 'Failed to create habit group', details: createError instanceof Error ? createError.message : 'Unknown error' },
+          { status: 500 }
+        )
+      }
     }
 
     // Sort actions by timestamp and apply them sequentially
