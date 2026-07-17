@@ -137,8 +137,8 @@ export default function HomePage() {
     }
   }, [saveFollowedGroup])
 
-  const syncWithServer = useCallback(async () => {
-    if (!userId || syncingRef.current) return
+  const syncWithServer = useCallback(async (): Promise<HabitGroup | null> => {
+    if (!userId || syncingRef.current) return null
 
     try {
       syncingRef.current = true
@@ -169,6 +169,7 @@ export default function HomePage() {
           setMyGroup(data.group)
           setHasGroup(true)
           await saveHabitGroup(data.group)
+          return data.group
         }
 
         // Remove synced actions from queue
@@ -182,8 +183,10 @@ export default function HomePage() {
           await updateLastSyncAt(data.serverTimestamp)
         }
       }
+      return null
     } catch (error) {
       console.error('Failed to sync with server:', error)
+      return null
     } finally {
       syncingRef.current = false
       setSyncing(false)
@@ -274,9 +277,8 @@ export default function HomePage() {
   const handleAddHabit = useCallback(async (name: string) => {
     // If no group exists, create one first
     if (!hasGroup || !myGroup) {
-      await syncWithServer()
-      // After sync, check again
-      if (!myGroup) {
+      const group = await syncWithServer()
+      if (!group) {
         console.error('Failed to create habit group')
         return
       }
