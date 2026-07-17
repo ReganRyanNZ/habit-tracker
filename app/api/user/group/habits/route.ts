@@ -43,7 +43,20 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const { userId } = await auth()
+  let userId: string | null = null
+
+  // Wrap auth in try-catch
+  try {
+    const authResult = await auth()
+    userId = authResult?.userId || null
+  } catch (authError) {
+    console.error('Auth error:', authError)
+    return NextResponse.json(
+      { error: 'Authentication failed', details: authError instanceof Error ? authError.message : 'Unknown auth error' },
+      { status: 401 }
+    )
+  }
+
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -100,7 +113,10 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('Failed to sync actions:', error)
-    return NextResponse.json({ error: 'Failed to sync actions' }, { status: 500 })
+    return NextResponse.json(
+      { error: 'Failed to sync actions', details: error instanceof Error ? error.message : 'Unknown error', userId },
+      { status: 500 }
+    )
   }
 }
 
