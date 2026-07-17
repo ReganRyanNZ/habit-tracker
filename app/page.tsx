@@ -271,8 +271,16 @@ export default function HomePage() {
     syncWithServer()
   }, [syncWithServer])
 
-  const handleAddHabit = useCallback((name: string) => {
-    if (!hasGroup) return
+  const handleAddHabit = useCallback(async (name: string) => {
+    // If no group exists, create one first
+    if (!hasGroup || !myGroup) {
+      await syncWithServer()
+      // After sync, check again
+      if (!myGroup) {
+        console.error('Failed to create habit group')
+        return
+      }
+    }
 
     const maxOrder = displayHabits.reduce((max, h) => Math.max(max, h.order), -1)
 
@@ -283,7 +291,7 @@ export default function HomePage() {
       order: maxOrder + 1,
       timestamp: Date.now(),
     })
-  }, [hasGroup, displayHabits, createAction])
+  }, [hasGroup, myGroup, displayHabits, createAction, syncWithServer])
 
   const handleToggleCompletion = useCallback((habitId: string, dateKey: string) => {
     const habit = displayHabits.find(h => h.id === habitId)
