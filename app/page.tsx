@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useAuth, UserButton } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
-import { Plus, Share2, Loader2 } from 'lucide-react'
+import { Plus, Share2 } from 'lucide-react'
 import {
   db,
   getUserHabitGroup,
@@ -450,12 +450,6 @@ export default function HomePage() {
 
         {/* Status indicators */}
         <div className="mx-4 mb-2 flex items-center gap-3 text-xs">
-          {syncing && (
-            <div className="text-zinc-400 flex items-center gap-1">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              Syncing...
-            </div>
-          )}
           {!isOnline && (
             <div className="text-amber-600 flex items-center gap-1">
               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
