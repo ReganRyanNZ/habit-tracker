@@ -91,19 +91,29 @@ export default function HabitGrid({
     return dates.findIndex(date => isToday(date))
   }, [dates])
 
-  // Scroll to position today on the right side of the screen
+  // Scroll so today's column lands in the middle of the visible date area
   useEffect(() => {
-    if (scrollContainerRef.current && todayIndex >= 0) {
-      const container = scrollContainerRef.current
-      const columnWidth = 44
-      const containerWidth = container.clientWidth
-      const targetPosition = (todayIndex * columnWidth) - containerWidth + columnWidth
+    const container = scrollContainerRef.current
+    if (!container || todayIndex < 0) return
 
-      container.scrollTo({
-        left: Math.max(0, targetPosition),
-        behavior: 'smooth'
-      })
-    }
+    // headers[0] is the sticky month column; today's <th> is the one after it.
+    // Measure real positions so we don't depend on guessed column widths.
+    const headers = container.querySelectorAll('thead th')
+    const stickyTh = headers[0]
+    const todayTh = headers[todayIndex + 1]
+    if (!stickyTh || !todayTh) return
+
+    const cRect = container.getBoundingClientRect()
+    const tRect = todayTh.getBoundingClientRect()
+    const todayCenter = tRect.left + tRect.width / 2
+    const stickyWidth = stickyTh.getBoundingClientRect().width
+    // Center today within the scrollable region to the right of the sticky column
+    const viewportCenter = cRect.left + stickyWidth + (cRect.width - stickyWidth) / 2
+
+    container.scrollTo({
+      left: container.scrollLeft + (todayCenter - viewportCenter),
+      behavior: 'smooth',
+    })
   }, [todayIndex])
 
   // Available months for the selector
