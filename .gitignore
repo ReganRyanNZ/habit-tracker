@@ -12,3 +12,6 @@ node_modules
 
 # Playwright MCP
 .playwright-mcp/
+
+# macOS Finder
+.DS_Store
