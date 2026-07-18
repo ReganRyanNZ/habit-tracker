@@ -5,22 +5,28 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'Habits',
   description: 'Track daily habits with friends.',
+  manifest: '/manifest.json',
   icons: {
+    // Browser tab / favicon (SVG is fine here).
     icon: '/favicon.svg',
-    apple: '/favicon.svg',
+    // iOS home-screen icon MUST be a raster PNG — iOS ignores SVG
+    // apple-touch-icons and falls back to a page screenshot.
+    apple: '/icon-192.png',
   },
-  ...(process.env.NODE_ENV === 'production' && {
-    manifest: '/manifest.json',
-  }),
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
     title: 'Habits',
   },
+  // Next only emits `mobile-web-app-capable` from appleWebApp; add the
+  // apple-prefixed variant for older iOS versions that need it for standalone.
+  other: {
+    'apple-mobile-web-app-capable': 'yes',
+  },
 }
 
 export const viewport: Viewport = {
-  themeColor: '#ffffff',
+  themeColor: '#3b82f6',
 }
 
 export default function RootLayout({
@@ -31,10 +37,6 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <html lang="en">
-        <head>
-          <link rel="icon" href="/favicon.ico" />
-          <link rel="apple-touch-icon" href="/icon-192.png" />
-        </head>
         <body className="antialiased">{children}</body>
       </html>
     </ClerkProvider>
