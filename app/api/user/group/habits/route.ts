@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/db'
-import { ensureUserExists } from '@/lib/auth-helpers'
+import { ensureUserExists, getUserDisplayName } from '@/lib/auth-helpers'
 import { randomUUID } from 'crypto'
 
 // Action type definition (must match client)
@@ -62,10 +62,23 @@ export async function POST(request: NextRequest) {
       group = await prisma.habitGroup.create({
         data: {
           userId,
-          name: 'My Habits',
+          name: await getUserDisplayName(userId),
           shareToken: randomUUID(),
         },
       })
+    }
+
+    // One-time upgrade: groups still on the old default name get renamed to the
+    // owner's display name, so shared/followed groups show a person. Only calls
+    // Clerk while the name is still the default; afterwards this is a no-op.
+    if (group.name === 'My Habits') {
+      const displayName = await getUserDisplayName(userId)
+      if (displayName !== 'My Habits') {
+        group = await prisma.habitGroup.update({
+          where: { id: group.id },
+          data: { name: displayName },
+        })
+      }
     }
 
     // Sort actions by timestamp and apply them sequentially

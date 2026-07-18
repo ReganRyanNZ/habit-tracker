@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/db'
-import { ensureUserExists } from '@/lib/auth-helpers'
+import { ensureUserExists, getUserDisplayName } from '@/lib/auth-helpers'
 
 export async function GET() {
   const { userId } = await auth()
@@ -16,7 +16,7 @@ export async function GET() {
     let group = await prisma.habitGroup.findUnique({ where: { userId } })
     if (!group) {
       group = await prisma.habitGroup.create({
-        data: { userId, name: 'My Habits' },
+        data: { userId, name: await getUserDisplayName(userId) },
       })
     }
 
