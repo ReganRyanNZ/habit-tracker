@@ -231,7 +231,7 @@ export default function HabitGrid({
                       }}
                     >
                       <div className="flex items-center justify-between h-full px-4 cursor-pointer">
-                        <span className="text-sm font-semibold text-zinc-600">{habit.groupName}</span>
+                        <span className="text-sm font-semibold text-zinc-600 whitespace-nowrap">{habit.groupName}</span>
                         {activeGroupId === habit.groupId && (
                           <Button
                             onClick={(e) => {
