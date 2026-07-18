@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/db'
+import { ensureUserExists } from '@/lib/auth-helpers'
 
 // GET - Fetch shared group by token (for viewing)
 export async function GET(
@@ -79,6 +80,9 @@ export async function POST(
     }
 
     if (action === 'follow') {
+      // Ensure the follower's User row exists (FK target for Follow)
+      await ensureUserExists(userId)
+
       // Check if already following
       const existing = await prisma.follow.findUnique({
         where: {

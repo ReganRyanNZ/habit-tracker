@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/db'
+import { ensureUserExists } from '@/lib/auth-helpers'
 
 export async function GET() {
   const { userId } = await auth()
@@ -9,25 +10,13 @@ export async function GET() {
   }
 
   try {
-    // Ensure user exists in database
-    await prisma.user.upsert({
-      where: { id: userId },
-      create: { id: userId },
-      update: {},
-    })
+    // Ensure the User row exists, then get-or-create the group
+    await ensureUserExists(userId)
 
-    // Check if user already has a habit group
-    let group = await prisma.habitGroup.findUnique({
-      where: { userId },
-    })
-
-    // Create one if it doesn't exist
+    let group = await prisma.habitGroup.findUnique({ where: { userId } })
     if (!group) {
       group = await prisma.habitGroup.create({
-        data: {
-          userId,
-          name: 'My Habits',
-        },
+        data: { userId, name: 'My Habits' },
       })
     }
 

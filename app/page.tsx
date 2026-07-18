@@ -3,11 +3,10 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useAuth, UserButton } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
-import { Plus, Share2, Loader2 } from 'lucide-react'
+import { Share2, Loader2 } from 'lucide-react'
 import {
   db,
   getUserHabitGroup,
-  getFollowedGroups,
   addActionToQueue,
   removeActionsFromQueue,
   updateLastSyncAt,
@@ -55,7 +54,6 @@ export default function HomePage() {
   const [myGroup, setMyGroup] = useState<HabitGroup | null>(null)
   const [isEditingName, setIsEditingName] = useState(false)
   const [showShareDialog, setShowShareDialog] = useState(false)
-  const [syncing, setSyncing] = useState(false)
   const [isOnline, setIsOnline] = useState(true)
 
   // Track syncing state to prevent concurrent syncs
@@ -142,12 +140,10 @@ export default function HomePage() {
 
     try {
       syncingRef.current = true
-      setSyncing(true)
 
-      // Get pending actions
+      // Snapshot the actions we're about to send
       const queue = await getSyncQueue()
 
-      // Send to server
       const res = await fetch('/api/user/group/habits', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -157,39 +153,39 @@ export default function HomePage() {
         }),
       })
 
-      if (res.ok) {
-        const data = await res.json()
+      if (!res.ok) return null
 
-        // Update base state with server response
-        setBaseHabits(data.habits)
-        await saveHabits(data.habits)
+      const data = await res.json()
 
-        // Update group info
-        if (data.group) {
-          setMyGroup(data.group)
-          setHasGroup(true)
-          await saveHabitGroup(data.group)
-          return data.group
-        }
+      // Adopt the server response as the new base state
+      setBaseHabits(data.habits)
+      await saveHabits(data.habits)
 
-        // Remove synced actions from queue
-        if (queue.actions.length > 0) {
-          await removeActionsFromQueue(queue.actions)
-          setPendingActions([]) // Clear pending actions
-        }
-
-        // Update last sync timestamp
-        if (data.serverTimestamp) {
-          await updateLastSyncAt(data.serverTimestamp)
-        }
+      if (data.group) {
+        setMyGroup(data.group)
+        setHasGroup(true)
+        await saveHabitGroup(data.group)
       }
-      return null
+
+      // Clear only the actions we just synced. Then recompute pending state from
+      // whatever is still queued — actions may have been added while this request
+      // was in flight, and base now already reflects the synced actions server-side.
+      if (queue.actions.length > 0) {
+        await removeActionsFromQueue(queue.actions)
+      }
+      const remaining = await getSyncQueue()
+      setPendingActions(remaining.actions)
+
+      if (data.serverTimestamp) {
+        await updateLastSyncAt(data.serverTimestamp)
+      }
+
+      return data.group ?? null
     } catch (error) {
       console.error('Failed to sync with server:', error)
       return null
     } finally {
       syncingRef.current = false
-      setSyncing(false)
     }
   }, [userId])
 
@@ -352,25 +348,20 @@ export default function HomePage() {
   }, [displayHabits, createAction])
 
   const handleSaveGroupName = async (newName: string) => {
-    if (!newName.trim() || !myGroup) return
+    const trimmed = newName.trim()
+    if (!trimmed || !myGroup) return
 
     try {
-      createAction({
-        type: 'rename_group',
-        name: newName.trim(),
-        timestamp: Date.now(),
-      })
-
-      // Also update via API for immediate feedback
       const res = await fetch('/api/user/group', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newName.trim() }),
+        body: JSON.stringify({ name: trimmed }),
       })
 
       if (res.ok) {
         const updated = await res.json()
         setMyGroup(updated)
+        await saveHabitGroup(updated)
         setIsEditingName(false)
       }
     } catch (error) {
@@ -482,7 +473,6 @@ export default function HomePage() {
         {/* Unified Habit Grid */}
         <HabitGrid
           habits={allHabits}
-          onHabitsChange={() => {}} // No-op, we use action callbacks
           onAddHabit={handleAddHabit}
           myGroupId={myGroup?.id || null}
           onUnfollow={handleUnfollow}

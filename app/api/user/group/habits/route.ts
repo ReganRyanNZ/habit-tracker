@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/db'
+import { ensureUserExists } from '@/lib/auth-helpers'
 import { randomUUID } from 'crypto'
 
 // Action type definition (must match client)
@@ -10,7 +11,6 @@ type Action =
   | { type: 'delete_habit'; id: string; timestamp: number }
   | { type: 'toggle_completion'; id: string; dateKey: string; completed: boolean; timestamp: number }
   | { type: 'reorder_habit'; id: string; order: number; timestamp: number }
-  | { type: 'rename_group'; name: string; timestamp: number }
 
 export async function GET() {
   const { userId } = await auth()
@@ -43,49 +43,29 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  let userId: string | null = null
-
-  // Wrap auth in try-catch
-  try {
-    const authResult = await auth()
-    userId = authResult?.userId || null
-  } catch (authError) {
-    console.error('Auth error:', authError)
-    return NextResponse.json(
-      { error: 'Authentication failed', details: authError instanceof Error ? authError.message : 'Unknown auth error' },
-      { status: 401 }
-    )
-  }
-
+  const { userId } = await auth()
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   try {
-    const { actions, lastSyncAt } = await request.json()
+    const { actions } = await request.json()
 
-    // Get or create user's group
-    let group = await prisma.habitGroup.findUnique({
-      where: { userId },
-    })
+    // Ensure the User row exists (it's the FK target for HabitGroup), then
+    // get-or-create the group. This is what lets brand-new users use the app
+    // on first load — without ensureUserExists, the create below throws a
+    // Postgres foreign-key violation because no User row exists yet.
+    await ensureUserExists(userId)
 
-    // Create group if it doesn't exist
+    let group = await prisma.habitGroup.findUnique({ where: { userId } })
     if (!group) {
-      try {
-        group = await prisma.habitGroup.create({
-          data: {
-            userId,
-            name: 'My Habits',
-            shareToken: randomUUID(),
-          },
-        })
-      } catch (createError) {
-        console.error('Failed to create habit group:', createError)
-        return NextResponse.json(
-          { error: 'Failed to create habit group', details: createError instanceof Error ? createError.message : 'Unknown error' },
-          { status: 500 }
-        )
-      }
+      group = await prisma.habitGroup.create({
+        data: {
+          userId,
+          name: 'My Habits',
+          shareToken: randomUUID(),
+        },
+      })
     }
 
     // Sort actions by timestamp and apply them sequentially
@@ -219,14 +199,6 @@ async function applyActionToDatabase(action: Action, groupId: string): Promise<v
           )
         )
       }
-      break
-    }
-
-    case 'rename_group': {
-      await prisma.habitGroup.update({
-        where: { id: groupId },
-        data: { name: action.name },
-      })
       break
     }
   }

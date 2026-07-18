@@ -37,7 +37,6 @@ export type Action =
   | { type: 'delete_habit'; id: string; timestamp: number }
   | { type: 'toggle_completion'; id: string; dateKey: string; completed: boolean; timestamp: number }
   | { type: 'reorder_habit'; id: string; order: number; timestamp: number }
-  | { type: 'rename_group'; name: string; timestamp: number }
 
 // Sync queue stores pending actions
 export interface SyncQueue {
@@ -119,34 +118,19 @@ export async function addActionsToQueue(actions: Action[]): Promise<void> {
   }
 }
 
+// Stable signature for an action, used to dedupe the queue after a sync
+function actionSignature(a: Action): string {
+  if ('dateKey' in a) {
+    return JSON.stringify({ type: a.type, id: a.id, dateKey: a.dateKey, timestamp: a.timestamp })
+  }
+  return JSON.stringify({ type: a.type, id: a.id, timestamp: a.timestamp })
+}
+
 // Remove actions from the queue (after successful sync)
 export async function removeActionsFromQueue(actionsToRemove: Action[]): Promise<void> {
   const queue = await getSyncQueue()
-
-  // Create a set of action signatures to identify which to remove
-  const toRemove = new Set(
-    actionsToRemove.map(a => {
-      // Create a unique signature for each action type
-      if (a.type === 'rename_group') {
-        return JSON.stringify({ type: a.type, timestamp: a.timestamp })
-      }
-      if ('dateKey' in a) {
-        return JSON.stringify({ type: a.type, id: a.id, dateKey: a.dateKey, timestamp: a.timestamp })
-      }
-      return JSON.stringify({ type: a.type, id: a.id, timestamp: a.timestamp })
-    })
-  )
-
-  queue.actions = queue.actions.filter(a => {
-    // Create signature for comparison
-    if (a.type === 'rename_group') {
-      return !toRemove.has(JSON.stringify({ type: a.type, timestamp: a.timestamp }))
-    }
-    if ('dateKey' in a) {
-      return !toRemove.has(JSON.stringify({ type: a.type, id: a.id, dateKey: a.dateKey, timestamp: a.timestamp }))
-    }
-    return !toRemove.has(JSON.stringify({ type: a.type, id: a.id, timestamp: a.timestamp }))
-  })
+  const toRemove = new Set(actionsToRemove.map(actionSignature))
+  queue.actions = queue.actions.filter(a => !toRemove.has(actionSignature(a)))
 
   if (queue.id) {
     await db.syncQueue.update(queue.id, { actions: queue.actions, lastSyncAt: queue.lastSyncAt })

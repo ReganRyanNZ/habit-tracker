@@ -164,7 +164,6 @@ export default function SharePage({ params }: { params: Promise<{ token: string 
             groupId: group.id,
             isOwner: false,
           }))}
-          onHabitsChange={() => {}}
           onAddHabit={() => {}}
           myGroupId={null}
           onUnfollow={() => {}}

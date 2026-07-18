@@ -15,7 +15,6 @@ interface SectionedHabit extends Habit {
 
 interface HabitGridProps {
   habits: SectionedHabit[]
-  onHabitsChange: (habits: SectionedHabit[]) => void // Kept for compatibility but unused
   onAddHabit: (name: string) => void
   myGroupId: string | null
   onUnfollow: (groupId: string) => void
@@ -27,7 +26,6 @@ interface HabitGridProps {
 
 export default function HabitGrid({
   habits,
-  onHabitsChange,
   onAddHabit,
   myGroupId,
   onUnfollow,
