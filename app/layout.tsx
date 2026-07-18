@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     icon: '/favicon.svg',
     // iOS home-screen icon MUST be a raster PNG — iOS ignores SVG
     // apple-touch-icons and falls back to a page screenshot.
-    apple: '/icon-192.png',
+    apple: '/icon-180.png',
   },
   appleWebApp: {
     capable: true,
