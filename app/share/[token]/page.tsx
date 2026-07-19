@@ -115,7 +115,7 @@ export default function SharePage({ params }: { params: Promise<{ token: string 
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 pt-4 pl-2">
+    <div className="min-h-screen bg-zinc-50 pt-4">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="flex justify-between items-center mb-7 mx-4 gap-2">

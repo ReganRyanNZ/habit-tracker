@@ -413,7 +413,7 @@ export default function HomePage() {
   const shareUrl = myGroup ? `${window.location.origin}/share/${myGroup.shareToken}` : ''
 
   return (
-    <div className="min-h-screen bg-zinc-50 pt-4 pl-2">
+    <div className="min-h-screen bg-zinc-50 pt-4">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="flex justify-between items-center mb-7 mx-4 gap-2">
