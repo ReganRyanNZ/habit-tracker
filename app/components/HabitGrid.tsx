@@ -234,18 +234,18 @@ export default function HabitGrid({
           <tbody>
             {flatHabits.map((habit, index) => (
               <React.Fragment key={habit.id}>
-                {/* Section header row */}
+                {/* Section header row — whole row toggles collapse except the kebab */}
                 {sectionIndices.has(index) && (
-                  <tr className="h-12">
-                    {/* Group name — click toggles collapse. Absolutely positioned so a
-                        long name overflows without resizing the shared first column. */}
-                    <td
-                      className="p-0 min-w-[120px] sticky left-0 bg-zinc-50 z-10 cursor-pointer select-none"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        toggleCollapse(habit.groupId)
-                      }}
-                    >
+                  <tr
+                    className="h-12 cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggleCollapse(habit.groupId)
+                    }}
+                  >
+                    {/* Group name. Absolutely positioned so a long name overflows
+                        without resizing the shared first column. */}
+                    <td className="p-0 min-w-[120px] sticky left-0 bg-zinc-50 z-10 select-none">
                       <span className="text-sm font-semibold text-zinc-600 whitespace-nowrap absolute left-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                         {collapsedGroups.has(habit.groupId) ? (
                           <ChevronRight className="h-4 w-4 shrink-0" />
@@ -257,13 +257,16 @@ export default function HabitGrid({
                     </td>
                     {/* Band spanning the date columns (minus the kebab column) */}
                     <td colSpan={Math.max(1, dates.length - 1)} className="p-0 bg-zinc-50"></td>
-                    {/* Kebab menu — pinned to the right edge of the screen */}
-                    <td className="sticky right-0 bg-zinc-50 z-10 p-0">
+                    {/* Kebab menu — pinned to the right edge. Stops propagation so
+                        clicking it opens the menu without toggling collapse. */}
+                    <td
+                      className="sticky right-0 bg-zinc-50 z-10 p-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <div className="flex items-center justify-center h-full">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <button
-                              onClick={(e) => e.stopPropagation()}
                               className="flex items-center justify-center h-8 w-8 rounded text-zinc-400 hover:text-zinc-700 hover:bg-zinc-200/70"
                               aria-label={`Options for ${habit.groupName}`}
                             >
