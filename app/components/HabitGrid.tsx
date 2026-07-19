@@ -232,7 +232,7 @@ export default function HabitGrid({
                     >
                       {/* Absolutely positioned so a long name overflows this cell
                           without resizing the shared first column. */}
-                      <span className="text-sm font-semibold text-zinc-600 whitespace-nowrap absolute left-4 top-1/2 -translate-y-1/2">
+                      <span className="text-sm font-semibold text-zinc-600 whitespace-nowrap absolute left-1 top-1/2 -translate-y-1/2">
                         {habit.groupName}
                       </span>
                       {activeGroupId === habit.groupId && (
