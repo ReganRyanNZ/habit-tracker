@@ -195,7 +195,7 @@ export default function HabitGrid({
   return (
     <div className="w-full">
       {/* Scrollable container with the full table */}
-      <div ref={scrollContainerRef} className="overflow-x-auto">
+      <div ref={scrollContainerRef} className="overflow-x-auto no-scrollbar">
         <table className="w-full border-collapse">
           {/* Calendar header - sticky at top */}
           <thead className="sticky top-0 z-20 bg-white">
