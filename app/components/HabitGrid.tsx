@@ -246,7 +246,7 @@ export default function HabitGrid({
                         toggleCollapse(habit.groupId)
                       }}
                     >
-                      <span className="text-sm font-semibold text-zinc-600 whitespace-nowrap absolute left-1 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                      <span className="text-sm font-semibold text-zinc-600 whitespace-nowrap absolute left-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                         {collapsedGroups.has(habit.groupId) ? (
                           <ChevronRight className="h-4 w-4 shrink-0" />
                         ) : (

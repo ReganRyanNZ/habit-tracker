@@ -65,7 +65,7 @@ export default function HabitRow({ habit, dates, onToggleCompletion, onDelete, o
   return (
     <tr className="border-t hover:bg-gray-50">
       <td
-        className={`p-1 sticky left-0 bg-white z-10 shadow-[1px_0_4px_rgba(0,0,0,0.1)] ${isOwner ? 'cursor-pointer' : ''}`}
+        className={`p-1 pl-2 sticky left-0 bg-white z-10 shadow-[1px_0_4px_rgba(0,0,0,0.1)] ${isOwner ? 'cursor-pointer' : ''}`}
         onClick={handleCellClick}
       >
         <div className="flex items-center gap-1">
