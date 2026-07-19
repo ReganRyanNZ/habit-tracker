@@ -5,7 +5,13 @@ import { Habit } from '@/lib/db-local'
 import { formatDate, formatDateKey, getMonthRange, getMonthName, isToday } from '@/lib/utils'
 import HabitRow from './HabitRow'
 import { Button } from '@/components/ui/button'
-import { UserMinus } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu'
+import { MoreVertical, ChevronDown, ChevronRight } from 'lucide-react'
 
 interface SectionedHabit extends Habit {
   groupName: string
@@ -44,8 +50,16 @@ export default function HabitGrid({
   // Delete confirmation state
   const [habitToDelete, setHabitToDelete] = useState<SectionedHabit | null>(null)
 
-  // Track which group section is active (for showing unfollow button)
-  const [activeGroupId, setActiveGroupId] = useState<string | null>(null)
+  // Which followed groups are collapsed (habit rows hidden, name still shown)
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  const toggleCollapse = useCallback((groupId: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(groupId)) next.delete(groupId)
+      else next.add(groupId)
+      return next
+    })
+  }, [])
 
   // Get dates for the selected month
   const dates = useMemo(() => getMonthRange(selectedYear, selectedMonth), [selectedYear, selectedMonth])
@@ -179,7 +193,7 @@ export default function HabitGrid({
   }, [onReorder])
 
   return (
-    <div className="w-full" onClick={() => setActiveGroupId(null)}>
+    <div className="w-full">
       {/* Scrollable container with the full table */}
       <div ref={scrollContainerRef} className="overflow-x-auto">
         <table className="w-full border-collapse">
@@ -223,45 +237,64 @@ export default function HabitGrid({
                 {/* Section header row */}
                 {sectionIndices.has(index) && (
                   <tr className="h-12">
+                    {/* Group name — click toggles collapse. Absolutely positioned so a
+                        long name overflows without resizing the shared first column. */}
                     <td
-                      className="p-0 min-w-[120px] sticky left-0 bg-zinc-50 z-10 cursor-pointer"
+                      className="p-0 min-w-[120px] sticky left-0 bg-zinc-50 z-10 cursor-pointer select-none"
                       onClick={(e) => {
                         e.stopPropagation()
-                        setActiveGroupId(activeGroupId === habit.groupId ? null : habit.groupId)
+                        toggleCollapse(habit.groupId)
                       }}
                     >
-                      {/* Absolutely positioned so a long name overflows this cell
-                          without resizing the shared first column. */}
-                      <span className="text-sm font-semibold text-zinc-600 whitespace-nowrap absolute left-1 top-1/2 -translate-y-1/2">
+                      <span className="text-sm font-semibold text-zinc-600 whitespace-nowrap absolute left-1 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                        {collapsedGroups.has(habit.groupId) ? (
+                          <ChevronRight className="h-4 w-4 shrink-0" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 shrink-0" />
+                        )}
                         {habit.groupName}
                       </span>
-                      {activeGroupId === habit.groupId && (
-                        <Button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            onUnfollow(habit.groupId)
-                          }}
-                          variant="ghost"
-                          size="sm"
-                          className="text-zinc-400 hover:text-red-600 h-6 px-2 absolute right-4 top-1/2 -translate-y-1/2 z-10"
-                        >
-                          <UserMinus className="h-3 w-3" />
-                        </Button>
-                      )}
                     </td>
-                    <td colSpan={dates.length} className="p-0 bg-zinc-50"></td>
+                    {/* Band spanning the date columns (minus the kebab column) */}
+                    <td colSpan={Math.max(1, dates.length - 1)} className="p-0 bg-zinc-50"></td>
+                    {/* Kebab menu — pinned to the right edge of the screen */}
+                    <td className="sticky right-0 bg-zinc-50 z-10 p-0">
+                      <div className="flex items-center justify-center h-full">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center justify-center h-8 w-8 rounded text-zinc-400 hover:text-zinc-700 hover:bg-zinc-200/70"
+                              aria-label={`Options for ${habit.groupName}`}
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => onUnfollow(habit.groupId)}
+                              className="text-red-600 focus:text-red-700"
+                            >
+                              Unfollow
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </td>
                   </tr>
                 )}
-                {/* Habit row */}
-                <HabitRow
-                  habit={habit}
-                  dates={dates}
-                  onToggleCompletion={handleToggleCompletion}
-                  onDelete={handleDelete}
-                  onRename={handleRename}
-                  onReorder={handleReorder}
-                  isOwner={habit.isOwner}
-                />
+                {/* Habit row (hidden when its group is collapsed) */}
+                {!collapsedGroups.has(habit.groupId) && (
+                  <HabitRow
+                    habit={habit}
+                    dates={dates}
+                    onToggleCompletion={handleToggleCompletion}
+                    onDelete={handleDelete}
+                    onRename={handleRename}
+                    onReorder={handleReorder}
+                    isOwner={habit.isOwner}
+                  />
+                )}
               </React.Fragment>
             ))}
           </tbody>
