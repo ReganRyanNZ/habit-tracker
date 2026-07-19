@@ -224,28 +224,30 @@ export default function HabitGrid({
                 {sectionIndices.has(index) && (
                   <tr className="h-12">
                     <td
-                      className="p-0 min-w-[120px] sticky left-0 bg-zinc-50 z-10"
+                      className="p-0 min-w-[120px] sticky left-0 bg-zinc-50 z-10 cursor-pointer"
                       onClick={(e) => {
                         e.stopPropagation()
                         setActiveGroupId(activeGroupId === habit.groupId ? null : habit.groupId)
                       }}
                     >
-                      <div className="flex items-center justify-between h-full px-4 cursor-pointer">
-                        <span className="text-sm font-semibold text-zinc-600 whitespace-nowrap">{habit.groupName}</span>
-                        {activeGroupId === habit.groupId && (
-                          <Button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onUnfollow(habit.groupId)
-                            }}
-                            variant="ghost"
-                            size="sm"
-                            className="text-zinc-400 hover:text-red-600 h-6 px-2"
-                          >
-                            <UserMinus className="h-3 w-3" />
-                          </Button>
-                        )}
-                      </div>
+                      {/* Absolutely positioned so a long name overflows this cell
+                          without resizing the shared first column. */}
+                      <span className="text-sm font-semibold text-zinc-600 whitespace-nowrap absolute left-4 top-1/2 -translate-y-1/2">
+                        {habit.groupName}
+                      </span>
+                      {activeGroupId === habit.groupId && (
+                        <Button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onUnfollow(habit.groupId)
+                          }}
+                          variant="ghost"
+                          size="sm"
+                          className="text-zinc-400 hover:text-red-600 h-6 px-2 absolute right-4 top-1/2 -translate-y-1/2 z-10"
+                        >
+                          <UserMinus className="h-3 w-3" />
+                        </Button>
+                      )}
                     </td>
                     <td colSpan={dates.length} className="p-0 bg-zinc-50"></td>
                   </tr>
