@@ -13,9 +13,10 @@ interface HabitRowProps {
   onRename: (habitId: string, newName: string) => void
   onReorder?: (habitId: string, direction: 'up' | 'down') => void
   isOwner: boolean
+  compact?: boolean
 }
 
-export default function HabitRow({ habit, dates, onToggleCompletion, onDelete, onRename, onReorder, isOwner }: HabitRowProps) {
+export default function HabitRow({ habit, dates, onToggleCompletion, onDelete, onRename, onReorder, isOwner, compact = false }: HabitRowProps) {
   const [showMenu, setShowMenu] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editName, setEditName] = useState(habit.name)
@@ -65,7 +66,7 @@ export default function HabitRow({ habit, dates, onToggleCompletion, onDelete, o
   return (
     <tr className="border-t hover:bg-gray-50">
       <td
-        className={`p-1 pl-2 sticky left-0 bg-white z-10 shadow-[1px_0_4px_rgba(0,0,0,0.1)] ${isOwner ? 'cursor-pointer' : ''}`}
+        className={`${compact ? 'p-px' : 'p-1'} pl-2 sticky left-0 bg-white z-10 shadow-[1px_0_4px_rgba(0,0,0,0.1)] ${isOwner ? 'cursor-pointer' : ''}`}
         onClick={handleCellClick}
       >
         <div className="flex items-center gap-1">
@@ -76,13 +77,13 @@ export default function HabitRow({ habit, dates, onToggleCompletion, onDelete, o
               onChange={e => setEditName(e.target.value)}
               onBlur={handleSaveEdit}
               onKeyDown={handleKeyDown}
-              className="flex-1 px-2 py-1 text-sm border rounded"
+              className={`flex-1 px-2 py-1 ${compact ? 'text-xs' : 'text-sm'} border rounded`}
               autoFocus
               onClick={e => e.stopPropagation()}
             />
           ) : (
             <>
-              <span className="text-sm flex-1 truncate">{habit.name}</span>
+              <span className={`${compact ? 'text-xs' : 'text-sm'} flex-1 truncate`}>{habit.name}</span>
               {isOwner && showMenu && (
                 <>
                   <button
@@ -128,11 +129,11 @@ export default function HabitRow({ habit, dates, onToggleCompletion, onDelete, o
         const isCompleted = habit.completions[dateKey]?.completed || false
 
         return (
-          <td key={date.toISOString()} className="text-center p-1">
+          <td key={date.toISOString()} className={`text-center ${compact ? 'p-px' : 'p-1'}`}>
             <button
               onClick={() => onToggleCompletion(habit.id, dateKey)}
               disabled={!isOwner}
-              className={`w-7 h-7 rounded-full mx-auto transition-all ${
+              className={`${compact ? 'w-5 h-5' : 'w-7 h-7'} rounded-full mx-auto transition-all ${
                 !isOwner && !isCompleted ? 'opacity-60' : ''
               } ${
                 isCompleted

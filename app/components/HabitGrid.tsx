@@ -100,6 +100,20 @@ export default function HabitGrid({
     return { flatHabits: flat, sectionIndices: indices }
   }, [sortedHabits])
 
+  // Switch to a compact layout when the habits wouldn't fit in the viewport without
+  // scrolling, so many habits stay visible at once. Estimate-based (no layout feedback
+  // loop); constants are tunable: ~40px/row, ~48px/section header, ~180px page+table header.
+  const [compact, setCompact] = useState(false)
+  useEffect(() => {
+    const recompute = () => {
+      const estimatedHeight = flatHabits.length * 40 + sectionIndices.size * 48
+      setCompact(estimatedHeight > window.innerHeight - 180)
+    }
+    recompute()
+    window.addEventListener('resize', recompute)
+    return () => window.removeEventListener('resize', recompute)
+  }, [flatHabits.length, sectionIndices.size])
+
   // Find the index of today in the dates array for scrolling
   const todayIndex = useMemo(() => {
     return dates.findIndex(date => isToday(date))
@@ -237,7 +251,7 @@ export default function HabitGrid({
                 {/* Section header row — whole row toggles collapse except the kebab */}
                 {sectionIndices.has(index) && (
                   <tr
-                    className="h-12 cursor-pointer"
+                    className={`${compact ? 'h-8' : 'h-12'} cursor-pointer`}
                     onClick={(e) => {
                       e.stopPropagation()
                       toggleCollapse(habit.groupId)
@@ -246,7 +260,7 @@ export default function HabitGrid({
                     {/* Group name. Absolutely positioned so a long name overflows
                         without resizing the shared first column. */}
                     <td className="p-0 min-w-[120px] sticky left-0 bg-zinc-50 z-10 select-none">
-                      <span className="text-sm font-semibold text-zinc-600 whitespace-nowrap absolute left-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                      <span className={`${compact ? 'text-xs' : 'text-sm'} font-semibold text-zinc-600 whitespace-nowrap absolute left-2 top-1/2 -translate-y-1/2 flex items-center gap-1`}>
                         {collapsedGroups.has(habit.groupId) ? (
                           <ChevronRight className="h-4 w-4 shrink-0" />
                         ) : (
@@ -296,6 +310,7 @@ export default function HabitGrid({
                     onRename={handleRename}
                     onReorder={handleReorder}
                     isOwner={habit.isOwner}
+                    compact={compact}
                   />
                 )}
               </React.Fragment>
