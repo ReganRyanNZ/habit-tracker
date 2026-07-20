@@ -128,7 +128,7 @@ export default function HabitRow({ habit, dates, onToggleCompletion, onDelete, o
         const isCompleted = habit.completions[dateKey]?.completed || false
 
         return (
-          <td key={date.toISOString()} className="text-center p-0.5">
+          <td key={date.toISOString()} className="text-center p-1">
             <button
               onClick={() => onToggleCompletion(habit.id, dateKey)}
               disabled={!isOwner}
