@@ -97,11 +97,16 @@ export async function POST(
         return NextResponse.json({ message: 'Already following' })
       }
 
-      // Create follow relationship
+      // Create follow relationship (append to the end of the followed list)
+      const maxOrder = await prisma.follow.aggregate({
+        where: { userId },
+        _max: { order: true },
+      })
       await prisma.follow.create({
         data: {
           userId,
           groupId: group.id,
+          order: (maxOrder._max.order ?? -1) + 1,
         },
       })
 

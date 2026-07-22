@@ -10,8 +10,9 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
-import { MoreVertical, ChevronDown, ChevronRight } from 'lucide-react'
+import { MoreVertical, ChevronDown, ChevronRight, ChevronUp, UserMinus } from 'lucide-react'
 
 interface SectionedHabit extends Habit {
   groupName: string
@@ -24,6 +25,7 @@ interface HabitGridProps {
   onAddHabit: (name: string) => void
   myGroupId: string | null
   onUnfollow: (groupId: string) => void
+  onReorderGroup?: (groupId: string, direction: 'up' | 'down') => void
   onToggleCompletion?: (habitId: string, dateKey: string) => void
   onDelete?: (habitId: string) => void
   onRename?: (habitId: string, newName: string) => void
@@ -35,6 +37,7 @@ export default function HabitGrid({
   onAddHabit,
   myGroupId,
   onUnfollow,
+  onReorderGroup,
   onToggleCompletion,
   onDelete,
   onRename,
@@ -77,10 +80,24 @@ export default function HabitGrid({
         return a.order - b.order
       }
 
-      // Different groups - sort by groupId for consistency
-      return a.groupId.localeCompare(b.groupId)
+      // Different followed groups: preserve the input order (the user-defined
+      // follow order). Stable sort keeps their relative positions.
+      return 0
     })
   }, [habits])
+
+  // Distinct followed-group ids in display order, for enabling/disabling move up/down.
+  const followedGroupIds = useMemo(() => {
+    const seen = new Set<string>()
+    const ids: string[] = []
+    for (const h of sortedHabits) {
+      if (!h.isOwner && !seen.has(h.groupId)) {
+        seen.add(h.groupId)
+        ids.push(h.groupId)
+      }
+    }
+    return ids
+  }, [sortedHabits])
 
   // Build flat habit list with section markers
   const { flatHabits, sectionIndices } = useMemo(() => {
@@ -289,9 +306,28 @@ export default function HabitGrid({
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem
+                              onClick={() => onReorderGroup?.(habit.groupId, 'up')}
+                              disabled={followedGroupIds.indexOf(habit.groupId) === 0}
+                            >
+                              <ChevronUp className="h-4 w-4" />
+                              Move up
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => onReorderGroup?.(habit.groupId, 'down')}
+                              disabled={
+                                followedGroupIds.indexOf(habit.groupId) ===
+                                followedGroupIds.length - 1
+                              }
+                            >
+                              <ChevronDown className="h-4 w-4" />
+                              Move down
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
                               onClick={() => onUnfollow(habit.groupId)}
                               className="text-red-600 focus:text-red-700"
                             >
+                              <UserMinus className="h-4 w-4" />
                               Unfollow
                             </DropdownMenuItem>
                           </DropdownMenuContent>

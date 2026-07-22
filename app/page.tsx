@@ -392,6 +392,29 @@ export default function HomePage() {
     }
   }
 
+  const handleReorderGroup = useCallback(async (groupId: string, direction: 'up' | 'down') => {
+    // Optimistic: reorder the followed groups array immediately
+    setFollowedGroups(prev => {
+      const idx = prev.findIndex(g => g.id === groupId)
+      const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+      if (idx === -1 || swapIdx < 0 || swapIdx >= prev.length) return prev
+      const next = [...prev]
+      ;[next[idx], next[swapIdx]] = [next[swapIdx], next[idx]]
+      return next
+    })
+    try {
+      const res = await fetch('/api/user/following', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groupId, direction }),
+      })
+      if (!res.ok) loadFollowedGroups() // revert on failure
+    } catch (error) {
+      console.error('Failed to reorder group:', error)
+      loadFollowedGroups()
+    }
+  }, [loadFollowedGroups])
+
   if (!isLoaded || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -476,6 +499,7 @@ export default function HomePage() {
           onAddHabit={handleAddHabit}
           myGroupId={myGroup?.id || null}
           onUnfollow={handleUnfollow}
+          onReorderGroup={handleReorderGroup}
           onToggleCompletion={handleToggleCompletion}
           onDelete={handleDeleteHabit}
           onRename={handleRenameHabit}
