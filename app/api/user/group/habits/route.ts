@@ -9,7 +9,7 @@ type Action =
   | { type: 'create_habit'; id: string; name: string; order: number; timestamp: number }
   | { type: 'rename_habit'; id: string; name: string; timestamp: number }
   | { type: 'delete_habit'; id: string; timestamp: number }
-  | { type: 'toggle_completion'; id: string; dateKey: string; completed: boolean; timestamp: number }
+  | { type: 'toggle_completion'; id: string; dateKey: string; state: 'grey' | 'green' | 'clear'; timestamp: number }
   | { type: 'reorder_habit'; id: string; order: number; timestamp: number }
 
 export async function GET() {
@@ -164,15 +164,16 @@ async function applyActionToDatabase(action: Action, groupId: string): Promise<v
     case 'toggle_completion': {
       const habit = await prisma.habit.findUnique({ where: { id: action.id } })
       if (habit) {
+        // Accept the new `state` payload; fall back to legacy `completed`.
+        const a = action as { id: string; dateKey: string; state?: 'grey' | 'green' | 'clear'; completed?: boolean; timestamp: number }
+        const state = a.state ?? (a.completed ? 'green' : 'grey')
         let completions = JSON.parse(habit.completions || '{}')
         const existing = completions[action.dateKey]
 
         // Only update if our action is newer
         if (!existing || action.timestamp > (existing.timestamp || 0)) {
-          completions[action.dateKey] = {
-            completed: action.completed,
-            timestamp: action.timestamp,
-          }
+          if (state === 'grey') delete completions[action.dateKey]
+          else completions[action.dateKey] = { state, timestamp: action.timestamp }
           await prisma.habit.update({
             where: { id: action.id },
             data: {

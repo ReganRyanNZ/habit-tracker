@@ -15,7 +15,9 @@ import {
   saveHabits,
   saveHabitGroup,
   saveFollowedGroup,
-  type Action
+  dotState,
+  type Action,
+  type CompletionState
 } from '@/lib/db-local'
 import type { Habit } from '@/lib/db-local'
 import HabitGrid from '@/app/components/HabitGrid'
@@ -295,13 +297,15 @@ export default function HomePage() {
     const habit = displayHabits.find(h => h.id === habitId)
     if (!habit) return
 
-    const currentCompletion = habit.completions[dateKey]
+    // Cycle: grey -> green -> clear -> grey
+    const current = dotState(habit.completions[dateKey])
+    const next: CompletionState = current === 'grey' ? 'green' : current === 'green' ? 'clear' : 'grey'
 
     createAction({
       type: 'toggle_completion',
       id: habitId,
       dateKey,
-      completed: currentCompletion?.completed ? false : true,
+      state: next,
       timestamp: Date.now(),
     })
   }, [displayHabits, createAction])

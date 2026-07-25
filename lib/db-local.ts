@@ -9,14 +9,31 @@ export interface HabitGroup {
   updatedAt: Date
 }
 
+// A completion entry for a (habit, date). `state` is the current tri-state model;
+// `completed` is the legacy boolean (treated as green when true).
+export type CompletionState = 'grey' | 'green' | 'clear'
+export interface CompletionEntry {
+  state?: 'green' | 'clear'
+  completed?: boolean // legacy
+  timestamp: number
+}
+
 export interface Habit {
   id: string
   groupId: string
   name: string
-  completions: Record<string, { completed: boolean; timestamp: number }>
+  completions: Record<string, CompletionEntry>
   order: number
   createdAt: Date
   updatedAt: Date
+}
+
+// Resolve a completion entry to a tri-state dot color (grey = no entry).
+export function dotState(entry?: CompletionEntry | null): CompletionState {
+  if (!entry) return 'grey'
+  if (entry.state === 'clear') return 'clear'
+  if (entry.state === 'green' || entry.completed === true) return 'green'
+  return 'grey'
 }
 
 export interface FollowedGroup {
@@ -35,7 +52,7 @@ export type Action =
   | { type: 'create_habit'; id: string; name: string; order: number; timestamp: number }
   | { type: 'rename_habit'; id: string; name: string; timestamp: number }
   | { type: 'delete_habit'; id: string; timestamp: number }
-  | { type: 'toggle_completion'; id: string; dateKey: string; completed: boolean; timestamp: number }
+  | { type: 'toggle_completion'; id: string; dateKey: string; state: CompletionState; timestamp: number }
   | { type: 'reorder_habit'; id: string; order: number; timestamp: number }
 
 // Sync queue stores pending actions
@@ -200,22 +217,18 @@ function applyActionToHabits(habits: Habit[], action: Action): Habit[] {
     case 'delete_habit':
       return habits.filter(h => h.id !== action.id)
 
-    case 'toggle_completion':
-      return habits.map(h =>
-        h.id === action.id
-          ? {
-              ...h,
-              completions: {
-                ...h.completions,
-                [action.dateKey]: {
-                  completed: action.completed,
-                  timestamp: action.timestamp,
-                },
-              },
-              updatedAt: new Date(action.timestamp),
-            }
-          : h
-      )
+    case 'toggle_completion': {
+      // Accept the new `state` payload; fall back to legacy `completed` if present.
+      const a = action as { id: string; dateKey: string; state?: CompletionState; completed?: boolean; timestamp: number }
+      const state: CompletionState = a.state ?? (a.completed ? 'green' : 'grey')
+      return habits.map(h => {
+        if (h.id !== action.id) return h
+        const completions = { ...h.completions }
+        if (state === 'grey') delete completions[a.dateKey]
+        else completions[a.dateKey] = { state, timestamp: action.timestamp }
+        return { ...h, completions, updatedAt: new Date(action.timestamp) }
+      })
+    }
 
     case 'reorder_habit':
       const habitToMove = habits.find(h => h.id === action.id)

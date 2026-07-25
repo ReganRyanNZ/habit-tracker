@@ -1,6 +1,6 @@
 'use client'
 
-import { Habit } from '@/lib/db-local'
+import { Habit, dotState } from '@/lib/db-local'
 import { formatDateKey } from '@/lib/utils'
 import { Trash2, Pencil, GripVertical } from 'lucide-react'
 import { useState } from 'react'
@@ -126,24 +126,25 @@ export default function HabitRow({ habit, dates, onToggleCompletion, onDelete, o
       </td>
       {dates.map((date, index) => {
         const dateKey = formatDateKey(date)
-        const isCompleted = habit.completions[dateKey]?.completed || false
+        const state = dotState(habit.completions[dateKey])
+
+        const colorClass =
+          state === 'green' ? 'bg-green-500'
+          : state === 'grey' ? 'bg-gray-200'
+          : 'opacity-0' // clear -> blends into the background
+        const hoverClass = isOwner
+          ? state === 'green' ? 'hover:bg-green-600'
+            : state === 'grey' ? 'hover:bg-gray-300'
+            : 'hover:opacity-100 hover:bg-gray-200' // reveal a clear dot so the owner can still click it
+          : ''
+        const fadeClass = !isOwner && state === 'grey' ? 'opacity-60' : ''
 
         return (
           <td key={date.toISOString()} className={`text-center align-middle ${compact ? 'p-px' : 'p-1'}`}>
             <button
               onClick={() => onToggleCompletion(habit.id, dateKey)}
               disabled={!isOwner}
-              className={`block ${compact ? 'w-5 h-5' : 'w-7 h-7'} rounded-full mx-auto my-1 transition-all ${
-                !isOwner && !isCompleted ? 'opacity-60' : ''
-              } ${
-                isCompleted
-                  ? 'bg-green-500'
-                  : 'bg-gray-200'
-              } ${isOwner && isCompleted ? 'hover:bg-green-600' : ''} ${
-                isOwner && !isCompleted ? 'hover:bg-gray-300' : ''
-              } ${
-                !isOwner ? 'cursor-not-allowed' : ''
-              }`}
+              className={`block ${compact ? 'w-5 h-5' : 'w-7 h-7'} rounded-full mx-auto my-1 transition-all ${colorClass} ${hoverClass} ${fadeClass} ${!isOwner ? 'cursor-not-allowed' : ''}`}
               aria-label={`Toggle ${habit.name} for ${dateKey}`}
             />
           </td>
