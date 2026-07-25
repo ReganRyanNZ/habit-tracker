@@ -135,7 +135,7 @@ export default function HabitRow({ habit, dates, onToggleCompletion, onDelete, o
         const hoverClass = isOwner
           ? state === 'green' ? 'hover:bg-green-600'
             : state === 'grey' ? 'hover:bg-gray-300'
-            : 'hover:opacity-100 hover:bg-gray-200' // reveal a clear dot so the owner can still click it
+            : '' // clear stays invisible; the owner clicks where the dot was to cycle
           : ''
         const fadeClass = !isOwner && state === 'grey' ? 'opacity-60' : ''
 
