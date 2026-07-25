@@ -53,8 +53,19 @@ export default function HabitGrid({
   // Delete confirmation state
   const [habitToDelete, setHabitToDelete] = useState<SectionedHabit | null>(null)
 
-  // Which followed groups are collapsed (habit rows hidden, name still shown)
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  // Which followed groups are collapsed (habit rows hidden, name still shown).
+  // Persisted per-device so the same groups stay collapsed on reload.
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => {
+    try {
+      const saved = typeof window !== 'undefined' ? localStorage.getItem('habits:collapsedGroups') : null
+      return saved ? new Set<string>(JSON.parse(saved)) : new Set()
+    } catch {
+      return new Set()
+    }
+  })
+  useEffect(() => {
+    try { localStorage.setItem('habits:collapsedGroups', JSON.stringify([...collapsedGroups])) } catch {}
+  }, [collapsedGroups])
   const toggleCollapse = useCallback((groupId: string) => {
     setCollapsedGroups(prev => {
       const next = new Set(prev)
@@ -117,19 +128,21 @@ export default function HabitGrid({
     return { flatHabits: flat, sectionIndices: indices }
   }, [sortedHabits])
 
-  // Switch to a compact layout when the habits wouldn't fit in the viewport without
-  // scrolling, so many habits stay visible at once. Estimate-based (no layout feedback
-  // loop); constants are tunable: ~40px/row, ~48px/section header, ~180px page+table header.
+  // Switch to a compact layout when the VISIBLE rows wouldn't fit in the viewport.
+  // Collapsing followed groups hides their rows, so this re-runs on collapse — collapse
+  // enough and it pops back to the comfortable (non-compact) layout. Estimate-based (no
+  // feedback loop): ~40px/row, ~48px/section header, ~180px page+table header.
   const [compact, setCompact] = useState(false)
   useEffect(() => {
     const recompute = () => {
-      const estimatedHeight = flatHabits.length * 40 + sectionIndices.size * 48
+      const visibleHabits = flatHabits.filter(h => !collapsedGroups.has(h.groupId)).length
+      const estimatedHeight = visibleHabits * 40 + sectionIndices.size * 48
       setCompact(estimatedHeight > window.innerHeight - 180)
     }
     recompute()
     window.addEventListener('resize', recompute)
     return () => window.removeEventListener('resize', recompute)
-  }, [flatHabits.length, sectionIndices.size])
+  }, [flatHabits, sectionIndices.size, collapsedGroups])
 
   // Find the index of today in the dates array for scrolling
   const todayIndex = useMemo(() => {
@@ -159,7 +172,7 @@ export default function HabitGrid({
       left: container.scrollLeft + (todayCenter - viewportCenter),
       behavior: 'smooth',
     })
-  }, [todayIndex])
+  }, [todayIndex, compact])
 
   // Available months for the selector
   const availableMonths = useMemo(() => {
@@ -249,7 +262,7 @@ export default function HabitGrid({
                 </select>
               </th>
               {dates.map(date => (
-                <th key={date.toISOString()} className="text-center p-1 min-w-[40px] bg-white z-20">
+                <th key={date.toISOString()} className={`text-center p-1 ${compact ? 'min-w-[32px]' : 'min-w-[40px]'} bg-white z-20`}>
                   <div className="flex flex-col items-center">
                     <span className={`text-xs font-medium ${isToday(date) ? 'text-blue-600' : 'text-gray-500'}`}>
                       {formatDate(date, 'day')}

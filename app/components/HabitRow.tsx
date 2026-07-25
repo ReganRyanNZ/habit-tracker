@@ -66,7 +66,7 @@ export default function HabitRow({ habit, dates, onToggleCompletion, onDelete, o
   return (
     <tr className="border-t hover:bg-gray-50">
       <td
-        className={`${compact ? 'p-px' : 'p-1'} pl-2 sticky left-0 bg-white z-10 shadow-[1px_0_4px_rgba(0,0,0,0.1)] ${isOwner ? 'cursor-pointer' : ''}`}
+        className={`${compact ? 'p-px' : 'p-1'} pl-2 align-middle sticky left-0 bg-white z-10 shadow-[1px_0_4px_rgba(0,0,0,0.1)] ${isOwner ? 'cursor-pointer' : ''}`}
         onClick={handleCellClick}
       >
         <div className="flex items-center gap-1">
@@ -129,11 +129,11 @@ export default function HabitRow({ habit, dates, onToggleCompletion, onDelete, o
         const isCompleted = habit.completions[dateKey]?.completed || false
 
         return (
-          <td key={date.toISOString()} className={`text-center ${compact ? 'p-px' : 'p-1'}`}>
+          <td key={date.toISOString()} className={`text-center align-middle ${compact ? 'p-px' : 'p-1'}`}>
             <button
               onClick={() => onToggleCompletion(habit.id, dateKey)}
               disabled={!isOwner}
-              className={`${compact ? 'w-5 h-5' : 'w-7 h-7'} rounded-full mx-auto transition-all ${
+              className={`block ${compact ? 'w-5 h-5' : 'w-7 h-7'} rounded-full mx-auto my-1 transition-all ${
                 !isOwner && !isCompleted ? 'opacity-60' : ''
               } ${
                 isCompleted
