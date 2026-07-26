@@ -132,9 +132,11 @@ export default function HabitRow({ habit, dates, onToggleCompletion, onDelete, o
           state === 'green' ? 'bg-green-500'
           : state === 'grey' ? 'bg-gray-200'
           : 'opacity-0' // clear -> blends into the background
+        // Hover feedback only on real hover-capable devices (desktop). On touch,
+        // :hover would "stick" after a tap and mask the state change.
         const hoverClass = isOwner
-          ? state === 'green' ? 'hover:bg-green-600'
-            : state === 'grey' ? 'hover:bg-gray-300'
+          ? state === 'green' ? '[@media(hover:hover)]:hover:bg-green-600'
+            : state === 'grey' ? '[@media(hover:hover)]:hover:bg-gray-300'
             : '' // clear stays invisible; the owner clicks where the dot was to cycle
           : ''
         const fadeClass = !isOwner && state === 'grey' ? 'opacity-60' : ''
@@ -144,7 +146,7 @@ export default function HabitRow({ habit, dates, onToggleCompletion, onDelete, o
             <button
               onClick={() => onToggleCompletion(habit.id, dateKey)}
               disabled={!isOwner}
-              className={`block ${compact ? 'w-5 h-5' : 'w-7 h-7'} rounded-full mx-auto my-1 transition-all ${colorClass} ${hoverClass} ${fadeClass} ${!isOwner ? 'cursor-not-allowed' : ''}`}
+              className={`block ${compact ? 'w-5 h-5' : 'w-7 h-7'} rounded-full mx-auto my-1 transition-all [-webkit-tap-highlight-color:transparent] ${colorClass} ${hoverClass} ${fadeClass} ${!isOwner ? 'cursor-not-allowed' : ''}`}
               aria-label={`Toggle ${habit.name} for ${dateKey}`}
             />
           </td>
