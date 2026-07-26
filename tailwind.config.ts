@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss"
+import plugin from "tailwindcss/plugin"
 
 const config: Config = {
   darkMode: ["class"],
@@ -47,6 +48,13 @@ const config: Config = {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    // Remove all hover behavior app-wide. :hover "sticks" on touch screens and
+    // masks state changes (e.g. dot color), so the hover: variant is rewired to a
+    // selector no element matches — hover: utilities never apply anywhere.
+    plugin(({ addVariant }) => {
+      addVariant("hover", "&:where([data-no-hover])")
+    }),
+  ],
 }
 export default config
