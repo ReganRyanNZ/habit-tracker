@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/db'
-import { ensureUserExists, getUserDisplayName } from '@/lib/auth-helpers'
+import { ensureUserExists, getUserDisplayName, getUserEmail } from '@/lib/auth-helpers'
 import { randomUUID } from 'crypto'
 
 // Action type definition (must match client)
@@ -56,6 +56,10 @@ export async function POST(request: NextRequest) {
     // on first load — without ensureUserExists, the create below throws a
     // Postgres foreign-key violation because no User row exists yet.
     await ensureUserExists(userId)
+    // One-time dev→prod Clerk migration: re-parent this user's old data (keyed to
+    // their dev user ID) onto their current user ID, matched by email. No-op unless
+    // CLERK_MIGRATION_MAP is set; safe to re-run.
+    await selfHealMigration(userId)
 
     let group = await prisma.habitGroup.findUnique({ where: { userId } })
     if (!group) {
@@ -215,5 +219,42 @@ async function applyActionToDatabase(action: Action, groupId: string): Promise<v
       }
       break
     }
+  }
+}
+
+// One-time dev→prod Clerk self-heal migration.
+// When a user first signs in on the production Clerk instance (new user ID),
+// re-parent their old (dev-instance) data onto the new ID, matched by email.
+// Driven by the CLERK_MIGRATION_MAP env var: a JSON { email: oldUserId } map.
+// No-op if the var is unset/invalid. Idempotent; delete the env var once done.
+async function selfHealMigration(userId: string): Promise<void> {
+  const mapRaw = process.env.CLERK_MIGRATION_MAP
+  if (!mapRaw) return
+  let map: Record<string, string>
+  try {
+    map = JSON.parse(mapRaw)
+  } catch {
+    return
+  }
+
+  const email = await getUserEmail(userId)
+  if (!email) return
+  const oldUserId = map[email]
+  if (!oldUserId || oldUserId === userId) return
+
+  // Move the old user's habit group to this user (only if they don't already have one)
+  const myGroup = await prisma.habitGroup.findUnique({ where: { userId } })
+  if (!myGroup) {
+    const oldGroup = await prisma.habitGroup.findUnique({ where: { userId: oldUserId } })
+    if (oldGroup) {
+      await prisma.habitGroup.update({ where: { id: oldGroup.id }, data: { userId } })
+      console.log(`[migration] re-parented group for ${email}: ${oldUserId} -> ${userId}`)
+    }
+  }
+
+  // Move their follows
+  const follows = await prisma.follow.updateMany({ where: { userId: oldUserId }, data: { userId } })
+  if (follows.count > 0) {
+    console.log(`[migration] re-parented ${follows.count} follow(s) for ${email}`)
   }
 }

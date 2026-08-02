@@ -43,3 +43,23 @@ export async function getUserDisplayName(userId: string): Promise<string> {
     return 'My Habits'
   }
 }
+
+/**
+ * Primary email for a user (lowercased), from Clerk.
+ *
+ * Used by the one-time dev→prod Clerk self-heal migration to match a user (by
+ * email) to their old data, which is keyed to their dev-instance user ID.
+ */
+export async function getUserEmail(userId: string): Promise<string | null> {
+  try {
+    const client = await clerkClient()
+    const user = await client.users.getUser(userId)
+    const email =
+      user.primaryEmailAddress?.emailAddress ||
+      user.emailAddresses?.find(e => e.id === user.primaryEmailAddressId)?.emailAddress ||
+      user.emailAddresses?.[0]?.emailAddress
+    return email ? email.toLowerCase() : null
+  } catch {
+    return null
+  }
+}
